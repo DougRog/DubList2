@@ -1,0 +1,1973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DUB Automation System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f0f2f5;
+            color: #1c1e21;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        
+        .card-header {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #1c1e21;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .upload-zone {
+            border: 3px dashed #cbd5e0;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .upload-zone:hover {
+            border-color: #667eea;
+            background: #f7fafc;
+        }
+        
+        .upload-zone.dragover {
+            border-color: #667eea;
+            background: #eef2ff;
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+        
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #059669;
+        }
+        
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 36px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .stat-label {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        
+        .stat-card.total .stat-value { color: #3b82f6; }
+        .stat-card.pending .stat-value { color: #f59e0b; }
+        .stat-card.approved .stat-value { color: #10b981; }
+        .stat-card.missing .stat-value { color: #ef4444; }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th {
+            background: #f9fafb;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #e5e7eb;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #374151;
+        }
+        
+        td {
+            padding: 15px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: middle;
+        }
+        
+        tr:hover {
+            background: #f9fafb;
+        }
+        
+        .match-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .match-badge.exact {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .match-badge.partial {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .match-badge.fuzzy {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .match-badge.none {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .match-options {
+            margin-top: 10px;
+        }
+        
+        .match-option {
+            padding: 8px 12px;
+            margin: 5px 0;
+            background: #f3f4f6;
+            border-radius: 6px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .match-option:hover {
+            background: #e5e7eb;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 5px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .status-badge.queued { background: #dbeafe; color: #1e40af; }
+        .status-badge.downloading { background: #fef3c7; color: #92400e; }
+        .status-badge.validating { background: #e0e7ff; color: #4338ca; }
+        .status-badge.completed { background: #d1fae5; color: #065f46; }
+        .status-badge.failed { background: #fee2e2; color: #991b1b; }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+        
+        .spinner {
+            border: 4px solid #e5e7eb;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border-left: 4px solid #10b981;
+        }
+        
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border-left: 4px solid #ef4444;
+        }
+        
+        .alert-info {
+            background: #dbeafe;
+            color: #1e40af;
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .tab-btn {
+            padding: 12px 20px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-weight: 600;
+            color: #6b7280;
+            transition: all 0.2s;
+        }
+        
+        .tab-btn.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .mono {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            font-size: 13px;
+        }
+        
+        .tooltip {
+            position: relative;
+            cursor: help;
+        }
+        
+        .queue-item {
+            padding: 15px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .queue-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .queue-info {
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            overflow: auto;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 22px;
+        }
+
+        .modal-close {
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #6b7280;
+            background: none;
+            border: none;
+        }
+
+        .modal-close:hover {
+            color: #1c1e21;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .mapping-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: #f9fafb;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+
+        .mapping-item-info {
+            flex: 1;
+        }
+
+        .mapping-item-abbrev {
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .mapping-item-full {
+            color: #6b7280;
+            font-size: 13px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .badge-info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .badge-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-search {
+            background: #e0e7ff;
+            color: #4338ca;
+        }
+
+        .watchlist-item {
+            padding: 15px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .watchlist-item.excluded {
+            opacity: 0.5;
+        }
+
+        .watchlist-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .watchlist-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .progress-text {
+            font-size: 13px;
+            color: #6b7280;
+            margin-top: 5px;
+        }
+
+        .checkbox-cell {
+            width: 40px;
+            text-align: center;
+        }
+
+        .batch-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .search-result-item {
+            padding: 12px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .search-result-item:hover {
+            background: #f3f4f6;
+        }
+
+        .search-result-path {
+            font-family: monospace;
+            font-size: 12px;
+            color: #6b7280;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>🎬 DUB Automation System</h1>
+            <p>Automated commercial dubbing workflow with FTP search, validation, and reporting</p>
+        </div>
+        <div class="action-buttons">
+            <button class="btn btn-secondary" onclick="openFTPInfoModal()">📊 FTP Index Info</button>
+            <button class="btn btn-secondary" onclick="openWatchlistModal()">📋 Watchlist</button>
+            <button class="btn btn-secondary" onclick="openSourceMappingsModal()">⚙️ Source Mappings</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <!-- Upload Section -->
+        <div class="card" id="upload-section">
+            <div class="card-header">
+                <span>📤 Upload DUB List</span>
+                <button class="btn btn-secondary btn-sm" onclick="refreshFTPIndex()">🔄 Refresh FTP Index</button>
+            </div>
+            
+            <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+                <div class="upload-icon">📁</div>
+                <h3>Click to upload or drag & drop</h3>
+                <p style="color: #6b7280; margin-top: 10px;">Upload .dub or .txt file to begin</p>
+                <input type="file" id="file-input" accept=".dub,.txt" onchange="uploadFile()">
+            </div>
+        </div>
+        
+        <!-- Main Content Section -->
+        <div class="card hidden" id="main-content-section">
+            <!-- Stats Section -->
+            <div id="stats-section">
+                <div class="stats-grid">
+                    <div class="stat-card total">
+                        <div class="stat-label">Total Spots</div>
+                        <div class="stat-value" id="stat-total">0</div>
+                    </div>
+                    <div class="stat-card pending">
+                        <div class="stat-label">Pending Review</div>
+                        <div class="stat-value" id="stat-pending">0</div>
+                    </div>
+                    <div class="stat-card approved">
+                        <div class="stat-label">Approved</div>
+                        <div class="stat-value" id="stat-approved">0</div>
+                    </div>
+                    <div class="stat-card missing">
+                        <div class="stat-label">No Match</div>
+                        <div class="stat-value" id="stat-missing">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Tabs -->
+            <div class="tab-buttons" style="margin-top: 30px;">
+                <button class="tab-btn active" onclick="switchMainTab('results')">📋 DUB List Results</button>
+                <button class="tab-btn" onclick="switchMainTab('queue')">⚙️ Download Queue</button>
+                <button class="tab-btn" onclick="switchMainTab('ftp-search')">🔍 FTP Search</button>
+            </div>
+
+            <!-- DUB List Results Tab -->
+            <div id="main-tab-results" class="tab-content active">
+                <div class="card-header" style="margin-top: 20px;">
+                    <span>DUB List Results</span>
+                    <div class="action-buttons">
+                        <button class="btn btn-primary" onclick="approveAllExact()">✓ Approve All Exact Matches</button>
+                        <button class="btn btn-success" onclick="generateReport()">📊 Generate Report</button>
+                    </div>
+                </div>
+                <div class="batch-actions" id="results-batch-actions" style="display: none; margin-top: 15px;">
+                    <button class="btn btn-primary" onclick="batchAddToWatchlist()">📋 Add Selected to Watchlist</button>
+                    <button class="btn btn-secondary" onclick="clearResultsSelection()">Clear Selection</button>
+                </div>
+
+                <div class="tab-buttons" style="margin-top: 15px;">
+                    <button class="tab-btn active" onclick="switchResultsTab('all')">All Spots</button>
+                    <button class="tab-btn" onclick="switchResultsTab('pending')">Pending Review</button>
+                    <button class="tab-btn" onclick="switchResultsTab('approved')">Approved</button>
+                    <button class="tab-btn" onclick="switchResultsTab('missing')">No Match</button>
+                </div>
+
+                <div style="margin: 20px 0; padding: 15px; background: #f9fafb; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div style="font-weight: 600; color: #374151;">Filter by Match Type:</div>
+                        <div id="filter-count" style="font-size: 13px; color: #6b7280;"></div>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                            <input type="checkbox" checked onchange="toggleMatchFilter('exact')" id="filter-exact">
+                            <span class="match-badge exact">Exact</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                            <input type="checkbox" checked onchange="toggleMatchFilter('partial')" id="filter-partial">
+                            <span class="match-badge partial">Partial</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                            <input type="checkbox" checked onchange="toggleMatchFilter('fuzzy')" id="filter-fuzzy">
+                            <span class="match-badge fuzzy">Fuzzy</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                            <input type="checkbox" checked onchange="toggleMatchFilter('none')" id="filter-none">
+                            <span class="match-badge none">No Match</span>
+                        </label>
+                        <button class="btn btn-secondary btn-sm" onclick="resetMatchFilters()" style="margin-left: 10px;">Reset Filters</button>
+                    </div>
+                </div>
+
+                <div id="spots-table-container"></div>
+            </div>
+
+            <!-- Download Queue Tab -->
+            <div id="main-tab-queue" class="tab-content">
+                <div class="card-header" style="margin-top: 20px;">
+                    <span>Download Queue</span>
+                    <span id="queue-count" style="color: #6b7280; font-size: 14px; font-weight: normal;">0 items</span>
+                </div>
+                <div id="queue-container" style="margin-top: 20px;"></div>
+            </div>
+
+            <!-- FTP Search Tab -->
+            <div id="main-tab-ftp-search" class="tab-content">
+                <div class="card-header" style="margin-top: 20px;">
+                    <span>FTP Search & Manual Download</span>
+                </div>
+                <div style="margin-top: 20px;">
+                    <p style="color: #6b7280; margin-bottom: 20px;">Search the FTP index for files and manually select them for download.</p>
+                    <div class="form-group">
+                        <label>Search Term</label>
+                        <input type="text" id="ftp-search-input" placeholder="Enter filename, house ID, or ad ID to search...">
+                    </div>
+                    <button class="btn btn-primary" onclick="performFTPSearch()">🔍 Search FTP</button>
+
+                    <div id="ftp-search-results" style="margin-top: 30px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Source Mappings Modal -->
+    <div id="source-mappings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Source Mappings</h2>
+                <button class="modal-close" onclick="closeModal('source-mappings-modal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Add New Mapping</label>
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <input type="text" id="new-mapping-abbrev" placeholder="Abbreviated (e.g., ERIE CREAT)" style="flex: 1;">
+                    <select id="new-mapping-directory" style="flex: 2;">
+                        <option value="">Select from indexed directories...</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="new-mapping-full" placeholder="Full Name (e.g., Erie Creative)" style="flex: 1;">
+                    <button class="btn btn-primary" onclick="addSourceMapping()">Add Mapping</button>
+                </div>
+            </div>
+            <div id="mappings-list"></div>
+        </div>
+    </div>
+
+    <!-- FTP Indexing Progress Modal -->
+    <div id="ftp-progress-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>FTP Indexing Progress</h2>
+                <button class="modal-close" onclick="closeModal('ftp-progress-modal')">&times;</button>
+            </div>
+            <div id="ftp-progress-content">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="ftp-progress-bar" style="width: 0%"></div>
+                </div>
+                <div class="progress-text" id="ftp-progress-text">Initializing...</div>
+                <div class="progress-text" id="ftp-current-dir"></div>
+                <div class="progress-text" id="ftp-files-count"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Watchlist Modal -->
+    <div id="watchlist-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Watchlist</h2>
+                <button class="modal-close" onclick="closeModal('watchlist-modal')">&times;</button>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <button class="btn btn-primary" onclick="checkWatchlist()">🔍 Check for Matches Now</button>
+                <span id="watchlist-status" style="margin-left: 15px; color: #6b7280;"></span>
+            </div>
+            <div class="batch-actions" id="batch-actions" style="display: none;">
+                <button class="btn btn-secondary" onclick="batchExcludeWatchlist(true)">Exclude Selected</button>
+                <button class="btn btn-primary" onclick="batchExcludeWatchlist(false)">Include Selected</button>
+                <button class="btn btn-danger" onclick="batchRemoveWatchlist()">Remove Selected</button>
+                <button class="btn btn-secondary" onclick="clearWatchlistSelection()">Clear Selection</button>
+            </div>
+            <div id="watchlist-container"></div>
+        </div>
+    </div>
+
+    <!-- FTP Index Info Modal -->
+    <div id="ftp-info-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>FTP Index Information</h2>
+                <button class="modal-close" onclick="closeModal('ftp-info-modal')">&times;</button>
+            </div>
+            <div id="ftp-info-content">
+                <div style="text-align: center; padding: 20px;">
+                    <div class="spinner"></div>
+                    <p>Loading index information...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manual Search Modal -->
+    <div id="manual-search-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Search FTP for Replacement</h2>
+                <button class="modal-close" onclick="closeModal('manual-search-modal')">&times;</button>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <div id="manual-search-info" style="padding: 15px; background: #f9fafb; border-radius: 8px; margin-bottom: 15px;">
+                    <strong>Searching for:</strong> <span id="search-spot-info"></span>
+                </div>
+                <div class="form-group">
+                    <label>Search Term</label>
+                    <input type="text" id="manual-search-input" placeholder="Enter filename to search for...">
+                </div>
+                <button class="btn btn-primary" onclick="performManualSearch()">🔍 Search</button>
+            </div>
+            <div id="manual-search-results"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentSession = null;
+        let spotsData = [];
+        let searchResults = {};
+        let currentMainTab = 'results';
+        let currentResultsTab = 'all';
+        let currentManualSearchSpot = null;
+        let selectedWatchlistItems = new Set();
+        let selectedResultsItems = new Set();
+        let matchFilters = new Set(['exact', 'partial', 'fuzzy', 'none']); // All enabled by default
+        
+        // File upload handling
+        const uploadZone = document.getElementById('upload-zone');
+        const fileInput = document.getElementById('file-input');
+        
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+        
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+        
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                uploadFile();
+            }
+        });
+        
+        async function uploadFile() {
+            const file = fileInput.files[0];
+            if (!file) return;
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            showLoading('Uploading and parsing DUB file...');
+            
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentSession = data.session_id;
+                    spotsData = data.spots;
+                    
+                    showAlert('success', `DUB file uploaded successfully! Found ${data.spot_count} spots.`);
+                    
+                    // Start FTP search
+                    await searchAllSpots();
+                } else {
+                    showAlert('error', data.error || 'Upload failed');
+                }
+            } catch (error) {
+                showAlert('error', 'Upload error: ' + error.message);
+            }
+        }
+        
+        async function searchAllSpots() {
+            showLoading('Searching FTP for matches...');
+            
+            try {
+                const response = await fetch('/api/search_all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: currentSession,
+                        spots: spotsData
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Store search results
+                    data.results.forEach(result => {
+                        searchResults[result.line_num] = result.match;
+                        
+                        // Update spot data
+                        const spot = spotsData.find(s => s.line_num === result.line_num);
+                        if (spot) {
+                            if (!result.match) {
+                                spot.status = 'no_match';
+                            } else if (result.match.type === 'exact' && result.match.matches.length === 1) {
+                                spot.status = 'ready';
+                                spot.match_type = 'exact';
+                                spot.ftp_path = result.match.matches[0].path;
+                                spot.ftp_filename = result.match.matches[0].filename;
+                            } else {
+                                spot.status = 'review';
+                                spot.match_type = result.match.type;
+                            }
+                        }
+                    });
+                    
+                    hideLoading();
+                    displayResults();
+                    updateStats();
+
+                    // Show main content section
+                    document.getElementById('main-content-section').classList.remove('hidden');
+                } else {
+                    showAlert('error', 'Search failed: ' + data.error);
+                }
+            } catch (error) {
+                showAlert('error', 'Search error: ' + error.message);
+            }
+        }
+        
+        function displayResults() {
+            const container = document.getElementById('spots-table-container');
+
+            let filteredSpots = spotsData;
+
+            // Apply tab filter
+            if (currentResultsTab === 'pending') {
+                filteredSpots = spotsData.filter(s => s.status === 'review' || s.status === 'ready');
+            } else if (currentResultsTab === 'approved') {
+                filteredSpots = spotsData.filter(s => s.status === 'approved');
+            } else if (currentResultsTab === 'missing') {
+                filteredSpots = spotsData.filter(s => s.status === 'no_match');
+            }
+
+            // Apply match type filter
+            const beforeFilterCount = filteredSpots.length;
+            filteredSpots = filteredSpots.filter(spot => {
+                const match = searchResults[spot.line_num];
+                const matchType = match ? match.type : 'none';
+                return matchFilters.has(matchType);
+            });
+
+            // Update filter count display
+            const filterCountEl = document.getElementById('filter-count');
+            if (filterCountEl) {
+                if (filteredSpots.length < beforeFilterCount) {
+                    filterCountEl.textContent = `Showing ${filteredSpots.length} of ${beforeFilterCount} results`;
+                } else {
+                    filterCountEl.textContent = `Showing ${filteredSpots.length} result${filteredSpots.length !== 1 ? 's' : ''}`;
+                }
+            }
+
+            // Check if we have any items we can select (no_match items)
+            const hasSelectableItems = filteredSpots.some(s => s.status === 'no_match');
+
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            ${hasSelectableItems ? '<th class="checkbox-cell"></th>' : ''}
+                            <th>Line</th>
+                            <th>House ID</th>
+                            <th>Ad ID</th>
+                            <th>Duration</th>
+                            <th>Source</th>
+                            <th>Match Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            filteredSpots.forEach(spot => {
+                const match = searchResults[spot.line_num];
+                let matchBadge = '<span class="match-badge none">No Match</span>';
+                let matchOptions = '';
+                let actionButton = '';
+
+                if (match) {
+                    matchBadge = `<span class="match-badge ${match.type}">${match.type}</span>`;
+
+                    // Add "searched archive" badge if applicable
+                    if (match.searched_archive) {
+                        matchBadge += ' <span class="badge badge-warning" title="Found in Lilly Archive">From Archive</span>';
+                    }
+                    // Add "searched everywhere" badge if applicable
+                    else if (match.searched_everywhere) {
+                        matchBadge += ' <span class="badge badge-search" title="Found by searching all directories">Searched Everywhere</span>';
+                    }
+
+                    if (match.matches.length > 0) {
+                        matchOptions = '<div class="match-options">';
+                        match.matches.slice(0, 3).forEach((m, idx) => {
+                            matchOptions += `
+                                <div class="match-option">
+                                    <span class="mono">${m.filename}</span>
+                                    <button class="btn btn-success btn-sm" onclick="approveSpot(${spot.line_num}, '${m.path}', '${m.filename}')">
+                                        Approve
+                                    </button>
+                                </div>
+                            `;
+                        });
+                        matchOptions += '</div>';
+                    }
+                }
+                
+                if (spot.status === 'ready' || spot.status === 'review') {
+                    actionButton = `
+                        <button class="btn btn-success" onclick="approveSpot(${spot.line_num}, '${spot.ftp_path}', '${spot.ftp_filename}')">
+                            ✓ Approve
+                        </button>
+                    `;
+                } else if (spot.status === 'approved') {
+                    actionButton = '<span class="status-badge completed">Approved</span>';
+                } else if (spot.status === 'no_match') {
+                    actionButton = '<button class="btn btn-secondary" onclick="manualSearch(${spot.line_num})">🔍 Manual Search</button>';
+                }
+
+                const isChecked = selectedResultsItems.has(spot.line_num) ? 'checked' : '';
+                const checkboxCell = hasSelectableItems && spot.status === 'no_match'
+                    ? `<td class="checkbox-cell"><input type="checkbox" ${isChecked} onchange="toggleResultsSelection(${spot.line_num})" style="cursor: pointer;"></td>`
+                    : (hasSelectableItems ? '<td class="checkbox-cell"></td>' : '');
+
+                html += `
+                    <tr>
+                        ${checkboxCell}
+                        <td>${spot.line_num}</td>
+                        <td class="mono"><strong>${spot.house_id}</strong></td>
+                        <td class="mono">${spot.ad_id}</td>
+                        <td>${spot.duration}</td>
+                        <td>${spot.source}</td>
+                        <td>
+                            ${matchBadge}
+                            ${matchOptions}
+                        </td>
+                        <td>${actionButton}</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+        
+        async function approveSpot(lineNum, ftpPath, ftpFilename) {
+            const spot = spotsData.find(s => s.line_num === lineNum);
+            if (!spot) return;
+            
+            spot.ftp_path = ftpPath;
+            spot.ftp_filename = ftpFilename;
+            spot.status = 'approved';
+            
+            try {
+                const response = await fetch('/api/approve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: currentSession,
+                        spot: spot
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayResults();
+                    updateStats();
+
+                    // Start monitoring queue
+                    startQueueMonitoring();
+                }
+            } catch (error) {
+                showAlert('error', 'Approval error: ' + error.message);
+            }
+        }
+        
+        function approveAllExact() {
+            const exactMatches = spotsData.filter(s => 
+                s.status === 'ready' && s.match_type === 'exact'
+            );
+            
+            if (exactMatches.length === 0) {
+                showAlert('info', 'No exact matches to approve');
+                return;
+            }
+            
+            if (!confirm(`Approve ${exactMatches.length} exact matches?`)) return;
+            
+            exactMatches.forEach(spot => {
+                approveSpot(spot.line_num, spot.ftp_path, spot.ftp_filename);
+            });
+        }
+        
+        let queueMonitorInterval = null;
+        
+        function startQueueMonitoring() {
+            if (queueMonitorInterval) return;
+            
+            queueMonitorInterval = setInterval(updateQueueDisplay, 2000);
+            updateQueueDisplay();
+        }
+        
+        async function updateQueueDisplay() {
+            try {
+                const response = await fetch(`/api/queue_status?session_id=${currentSession}`);
+                const data = await response.json();
+                
+                const container = document.getElementById('queue-container');
+                const countEl = document.getElementById('queue-count');
+                
+                const jobs = data.jobs || [];
+                countEl.textContent = `${jobs.length} item${jobs.length !== 1 ? 's' : ''}`;
+                
+                if (jobs.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 20px;">No downloads in progress</p>';
+                    return;
+                }
+                
+                let html = '';
+                jobs.forEach(job => {
+                    html += `
+                        <div class="queue-item">
+                            <div class="queue-header">
+                                <strong class="mono">${job.house_id}</strong>
+                                <span class="status-badge ${job.status}">${job.status}</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${job.progress}%"></div>
+                            </div>
+                            <div class="queue-info">${job.message}</div>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+            } catch (error) {
+                console.error('Queue update error:', error);
+            }
+        }
+        
+        async function generateReport() {
+            showLoading('Generating report...');
+            
+            try {
+                const response = await fetch('/api/generate_report', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: currentSession })
+                });
+                
+                const data = await response.json();
+                
+                hideLoading();
+                
+                if (data.success) {
+                    window.open(data.download_url, '_blank');
+                    showAlert('success', 'Report generated successfully!');
+                } else {
+                    showAlert('error', 'Report generation failed: ' + data.error);
+                }
+            } catch (error) {
+                hideLoading();
+                showAlert('error', 'Report error: ' + error.message);
+            }
+        }
+        
+        function switchMainTab(tab) {
+            currentMainTab = tab;
+
+            // Update main tab buttons
+            const mainTabButtons = document.querySelectorAll('#main-content-section > .tab-buttons .tab-btn');
+            mainTabButtons.forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Hide all main tab contents
+            document.querySelectorAll('#main-content-section > .tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Show selected tab content
+            document.getElementById('main-tab-' + tab).classList.add('active');
+
+            // Start queue monitoring when switching to queue tab
+            if (tab === 'queue') {
+                startQueueMonitoring();
+            }
+        }
+
+        function switchResultsTab(tab) {
+            currentResultsTab = tab;
+
+            // Update results tab buttons
+            const resultsTabButtons = document.querySelectorAll('#main-tab-results .tab-buttons .tab-btn');
+            resultsTabButtons.forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            displayResults();
+        }
+
+        function toggleMatchFilter(matchType) {
+            if (matchFilters.has(matchType)) {
+                matchFilters.delete(matchType);
+            } else {
+                matchFilters.add(matchType);
+            }
+            displayResults();
+        }
+
+        function resetMatchFilters() {
+            matchFilters = new Set(['exact', 'partial', 'fuzzy', 'none']);
+
+            // Update checkbox states
+            document.getElementById('filter-exact').checked = true;
+            document.getElementById('filter-partial').checked = true;
+            document.getElementById('filter-fuzzy').checked = true;
+            document.getElementById('filter-none').checked = true;
+
+            displayResults();
+        }
+        
+        function updateStats() {
+            const total = spotsData.length;
+            const pending = spotsData.filter(s => s.status === 'review' || s.status === 'ready').length;
+            const approved = spotsData.filter(s => s.status === 'approved').length;
+            const missing = spotsData.filter(s => s.status === 'no_match').length;
+            
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-pending').textContent = pending;
+            document.getElementById('stat-approved').textContent = approved;
+            document.getElementById('stat-missing').textContent = missing;
+        }
+        
+        function showAlert(type, message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            
+            document.querySelector('.container').insertBefore(
+                alertDiv,
+                document.querySelector('.container').firstChild
+            );
+            
+            setTimeout(() => alertDiv.remove(), 5000);
+        }
+        
+        function showLoading(message) {
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'loading-overlay';
+            loadingDiv.className = 'loading';
+            loadingDiv.innerHTML = `
+                <div class="spinner"></div>
+                <p>${message}</p>
+            `;
+            document.body.appendChild(loadingDiv);
+        }
+        
+        function hideLoading() {
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay) overlay.remove();
+        }
+        
+        async function refreshFTPIndex() {
+            if (!confirm('Refresh FTP index? This may take a few minutes.')) return;
+
+            openModal('ftp-progress-modal');
+
+            try {
+                await fetch('/api/refresh_ftp_index', { method: 'POST' });
+                monitorFTPProgress();
+            } catch (error) {
+                showAlert('error', 'Refresh error: ' + error.message);
+                closeModal('ftp-progress-modal');
+            }
+        }
+
+        async function monitorFTPProgress() {
+            const interval = setInterval(async () => {
+                try {
+                    const response = await fetch('/api/ftp_progress');
+                    const data = await response.json();
+
+                    document.getElementById('ftp-progress-bar').style.width = data.progress + '%';
+                    document.getElementById('ftp-progress-text').textContent = `Status: ${data.status}`;
+                    document.getElementById('ftp-current-dir').textContent = data.current_dir ? `Scanning: ${data.current_dir}` : '';
+                    document.getElementById('ftp-files-count').textContent = `Files found: ${data.files_found}`;
+
+                    if (data.status === 'complete') {
+                        clearInterval(interval);
+                        setTimeout(() => {
+                            closeModal('ftp-progress-modal');
+                            showAlert('success', `FTP index complete! ${data.files_found} files indexed.`);
+                        }, 2000);
+                    } else if (data.status === 'error') {
+                        clearInterval(interval);
+                        showAlert('error', 'FTP indexing error: ' + (data.error || 'Unknown error'));
+                        closeModal('ftp-progress-modal');
+                    }
+                } catch (error) {
+                    console.error('Error monitoring FTP progress:', error);
+                }
+            }, 1000);
+        }
+        
+        function manualSearch(lineNum) {
+            const spot = spotsData.find(s => s.line_num === lineNum);
+            if (!spot) return;
+
+            // Switch to FTP Search tab
+            switchMainTab('ftp-search');
+            // Update button to show it's active
+            const mainTabButtons = document.querySelectorAll('#main-content-section > .tab-buttons .tab-btn');
+            mainTabButtons.forEach(btn => btn.classList.remove('active'));
+            mainTabButtons[2].classList.add('active'); // FTP Search is third button
+
+            // Pre-fill search input
+            const searchInput = document.getElementById('ftp-search-input');
+            if (searchInput) {
+                searchInput.value = spot.ad_id || spot.house_id;
+                searchInput.focus();
+            }
+
+            // Show info about what we're searching for
+            const resultsContainer = document.getElementById('ftp-search-results');
+            resultsContainer.innerHTML = `
+                <div style="padding: 15px; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 8px; margin-bottom: 20px;">
+                    <strong>Searching for:</strong> ${spot.house_id} (${spot.ad_id || 'N/A'}) - ${spot.duration}<br>
+                    <small style="color: #6b7280;">Modify the search term above and click "Search FTP" to find alternative files.</small>
+                </div>
+            `;
+        }
+
+        // Modal functions
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        // Source Mappings functions
+        async function openSourceMappingsModal() {
+            openModal('source-mappings-modal');
+            await loadSourceMappings();
+            await loadDirectories();
+        }
+
+        async function loadSourceMappings() {
+            try {
+                const response = await fetch('/api/source_mappings');
+                const data = await response.json();
+
+                const container = document.getElementById('mappings-list');
+                let html = '<h3 style="margin-top: 20px;">Current Mappings</h3>';
+
+                const mappings = data.mappings || {};
+                const entries = Object.entries(mappings);
+
+                if (entries.length === 0) {
+                    html += '<p style="color: #6b7280;">No source mappings defined yet.</p>';
+                } else {
+                    entries.forEach(([abbrev, full]) => {
+                        html += `
+                            <div class="mapping-item">
+                                <div class="mapping-item-info">
+                                    <div class="mapping-item-abbrev">${abbrev}</div>
+                                    <div class="mapping-item-full">→ ${full}</div>
+                                </div>
+                                <button class="btn btn-danger btn-sm" onclick="deleteSourceMapping('${abbrev}')">Delete</button>
+                            </div>
+                        `;
+                    });
+                }
+
+                container.innerHTML = html;
+            } catch (error) {
+                showAlert('error', 'Error loading source mappings: ' + error.message);
+            }
+        }
+
+        async function loadDirectories() {
+            try {
+                const response = await fetch('/api/ftp_directories');
+                const data = await response.json();
+
+                const select = document.getElementById('new-mapping-directory');
+                select.innerHTML = '<option value="">Select from indexed directories...</option>';
+
+                (data.directories || []).forEach(dir => {
+                    const dirName = dir.split('/').pop();
+                    if (dirName) {
+                        select.innerHTML += `<option value="${dirName}">${dirName}</option>`;
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading directories:', error);
+            }
+        }
+
+        async function addSourceMapping() {
+            const abbrev = document.getElementById('new-mapping-abbrev').value.trim().toUpperCase();
+            let full = document.getElementById('new-mapping-full').value.trim();
+            const directory = document.getElementById('new-mapping-directory').value;
+
+            if (!abbrev) {
+                showAlert('error', 'Please enter an abbreviated name');
+                return;
+            }
+
+            if (!full && directory) {
+                full = directory.replace(/_/g, ' ').replace(/-/g, ' ');
+            }
+
+            if (!full) {
+                showAlert('error', 'Please enter a full name or select a directory');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/source_mappings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ abbreviated: abbrev, full_name: full })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert('success', data.message);
+                    document.getElementById('new-mapping-abbrev').value = '';
+                    document.getElementById('new-mapping-full').value = '';
+                    document.getElementById('new-mapping-directory').value = '';
+                    await loadSourceMappings();
+                } else {
+                    showAlert('error', data.error);
+                }
+            } catch (error) {
+                showAlert('error', 'Error adding mapping: ' + error.message);
+            }
+        }
+
+        async function deleteSourceMapping(abbrev) {
+            if (!confirm(`Delete mapping for "${abbrev}"?`)) return;
+
+            try {
+                const response = await fetch(`/api/source_mappings/${encodeURIComponent(abbrev)}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert('success', data.message);
+                    await loadSourceMappings();
+                } else {
+                    showAlert('error', data.error);
+                }
+            } catch (error) {
+                showAlert('error', 'Error deleting mapping: ' + error.message);
+            }
+        }
+
+        // Watchlist functions
+        async function openWatchlistModal() {
+            openModal('watchlist-modal');
+            await loadWatchlist();
+        }
+
+        async function loadWatchlist() {
+            try {
+                const response = await fetch('/api/watchlist');
+                const data = await response.json();
+
+                const container = document.getElementById('watchlist-container');
+                const items = data.watchlist || [];
+
+                if (items.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 20px;">No items in watchlist</p>';
+                    document.getElementById('batch-actions').style.display = 'none';
+                    return;
+                }
+
+                let html = '';
+                items.forEach(item => {
+                    const autoAdded = item.auto_added ? '<span class="badge badge-info">Auto-added</span>' : '';
+                    const matchFound = item.match_found ? '<span class="badge badge-success">Match Found</span>' : '';
+                    const excludedClass = item.exclude ? ' excluded' : '';
+                    const excludedBadge = item.exclude ? '<span class="badge badge-warning">Excluded</span>' : '';
+                    const isChecked = selectedWatchlistItems.has(item.house_id) ? 'checked' : '';
+
+                    html += `
+                        <div class="watchlist-item${excludedClass}">
+                            <div class="watchlist-header">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="checkbox" ${isChecked} onchange="toggleWatchlistSelection('${item.house_id}')" style="cursor: pointer;">
+                                    <strong class="mono">${item.house_id}</strong>
+                                    ${autoAdded}
+                                    ${matchFound}
+                                    ${excludedBadge}
+                                </div>
+                                <div class="watchlist-actions">
+                                    ${!item.exclude ? `
+                                        <button class="btn btn-secondary btn-sm" onclick="toggleWatchlistExclude('${item.house_id}', true)">
+                                            Exclude
+                                        </button>
+                                    ` : `
+                                        <button class="btn btn-primary btn-sm" onclick="toggleWatchlistExclude('${item.house_id}', false)">
+                                            Include
+                                        </button>
+                                    `}
+                                    <button class="btn btn-danger btn-sm" onclick="removeFromWatchlist('${item.house_id}')">
+                                        Remove
+                                    </button>
+                                </div>
+                            </div>
+                            <div style="font-size: 13px; color: #6b7280;">
+                                <div>Ad ID: ${item.ad_id || 'N/A'}</div>
+                                <div>Duration: ${item.duration || 'N/A'}</div>
+                                <div>Source: ${item.source || 'N/A'}</div>
+                                <div>Added: ${new Date(item.added_date).toLocaleString()}</div>
+                                ${item.last_checked ? `<div>Last Checked: ${new Date(item.last_checked).toLocaleString()}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                container.innerHTML = html;
+                updateBatchActionsVisibility();
+            } catch (error) {
+                showAlert('error', 'Error loading watchlist: ' + error.message);
+            }
+        }
+
+        function toggleWatchlistSelection(houseId) {
+            if (selectedWatchlistItems.has(houseId)) {
+                selectedWatchlistItems.delete(houseId);
+            } else {
+                selectedWatchlistItems.add(houseId);
+            }
+            updateBatchActionsVisibility();
+        }
+
+        function updateBatchActionsVisibility() {
+            const batchActions = document.getElementById('batch-actions');
+            if (selectedWatchlistItems.size > 0) {
+                batchActions.style.display = 'flex';
+            } else {
+                batchActions.style.display = 'none';
+            }
+        }
+
+        function clearWatchlistSelection() {
+            selectedWatchlistItems.clear();
+            loadWatchlist();
+        }
+
+        async function batchExcludeWatchlist(exclude) {
+            if (selectedWatchlistItems.size === 0) return;
+
+            const items = Array.from(selectedWatchlistItems);
+            let successCount = 0;
+
+            for (const houseId of items) {
+                try {
+                    const response = await fetch(`/api/watchlist/${encodeURIComponent(houseId)}/exclude`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ exclude })
+                    });
+
+                    if (response.ok) {
+                        successCount++;
+                    }
+                } catch (error) {
+                    console.error(`Error updating ${houseId}:`, error);
+                }
+            }
+
+            showAlert('success', `${exclude ? 'Excluded' : 'Included'} ${successCount} item(s)`);
+            selectedWatchlistItems.clear();
+            await loadWatchlist();
+        }
+
+        async function batchRemoveWatchlist() {
+            if (selectedWatchlistItems.size === 0) return;
+
+            if (!confirm(`Remove ${selectedWatchlistItems.size} item(s) from watchlist?`)) return;
+
+            const items = Array.from(selectedWatchlistItems);
+            let successCount = 0;
+
+            for (const houseId of items) {
+                try {
+                    const response = await fetch(`/api/watchlist/${encodeURIComponent(houseId)}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (response.ok) {
+                        successCount++;
+                    }
+                } catch (error) {
+                    console.error(`Error removing ${houseId}:`, error);
+                }
+            }
+
+            showAlert('success', `Removed ${successCount} item(s) from watchlist`);
+            selectedWatchlistItems.clear();
+            await loadWatchlist();
+        }
+
+        async function toggleWatchlistExclude(houseId, exclude) {
+            try {
+                const response = await fetch(`/api/watchlist/${encodeURIComponent(houseId)}/exclude`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ exclude })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    await loadWatchlist();
+                } else {
+                    showAlert('error', data.error);
+                }
+            } catch (error) {
+                showAlert('error', 'Error updating watchlist: ' + error.message);
+            }
+        }
+
+        async function removeFromWatchlist(houseId) {
+            if (!confirm(`Remove "${houseId}" from watchlist?`)) return;
+
+            try {
+                const response = await fetch(`/api/watchlist/${encodeURIComponent(houseId)}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert('success', data.message);
+                    await loadWatchlist();
+                } else {
+                    showAlert('error', data.error);
+                }
+            } catch (error) {
+                showAlert('error', 'Error removing from watchlist: ' + error.message);
+            }
+        }
+
+        async function checkWatchlist() {
+            const statusEl = document.getElementById('watchlist-status');
+            statusEl.textContent = 'Checking...';
+
+            try {
+                const response = await fetch('/api/watchlist/check', { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    statusEl.textContent = 'Check started! This may take a few minutes...';
+
+                    // Reload watchlist after a delay
+                    setTimeout(async () => {
+                        await loadWatchlist();
+                        statusEl.textContent = 'Check complete!';
+                        setTimeout(() => statusEl.textContent = '', 3000);
+                    }, 5000);
+                } else {
+                    statusEl.textContent = 'Error: ' + data.error;
+                }
+            } catch (error) {
+                statusEl.textContent = 'Error: ' + error.message;
+            }
+        }
+
+        // FTP Info Modal
+        async function openFTPInfoModal() {
+            openModal('ftp-info-modal');
+            await loadFTPInfo();
+        }
+
+        async function loadFTPInfo() {
+            try {
+                const progressResponse = await fetch('/api/ftp_progress');
+                const progressData = await progressResponse.json();
+
+                const dirResponse = await fetch('/api/ftp_directories');
+                const dirData = await dirResponse.json();
+
+                const container = document.getElementById('ftp-info-content');
+
+                const directories = dirData.directories || [];
+                const lastUpdated = progressData.status === 'complete' ? 'Index ready' : progressData.status;
+
+                let html = `
+                    <div style="margin-bottom: 20px;">
+                        <h3 style="margin-bottom: 15px;">Index Statistics</h3>
+                        <div class="stats-grid" style="grid-template-columns: repeat(2, 1fr);">
+                            <div class="stat-card">
+                                <div class="stat-label">Total Files Indexed</div>
+                                <div class="stat-value" style="color: #3b82f6;">${progressData.files_found || 0}</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Directories Scanned</div>
+                                <div class="stat-value" style="color: #10b981;">${directories.length}</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 15px; padding: 15px; background: #f9fafb; border-radius: 8px;">
+                            <strong>Status:</strong> ${lastUpdated}<br>
+                            ${progressData.current_dir ? `<strong>Current:</strong> ${progressData.current_dir}<br>` : ''}
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 30px;">
+                        <h3 style="margin-bottom: 15px;">Indexed Directories</h3>
+                        <div style="max-height: 300px; overflow-y: auto; background: #f9fafb; border-radius: 8px; padding: 15px;">
+                `;
+
+                if (directories.length === 0) {
+                    html += '<p style="color: #6b7280;">No directories indexed yet. Click "Refresh FTP Index" to start indexing.</p>';
+                } else {
+                    directories.forEach(dir => {
+                        html += `<div style="padding: 8px; border-bottom: 1px solid #e5e7eb; font-family: monospace; font-size: 13px;">${dir}</div>`;
+                    });
+                }
+
+                html += `
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 20px; text-align: center;">
+                        <button class="btn btn-primary" onclick="closeModal('ftp-info-modal'); refreshFTPIndex();">
+                            🔄 Refresh FTP Index
+                        </button>
+                    </div>
+                `;
+
+                container.innerHTML = html;
+            } catch (error) {
+                const container = document.getElementById('ftp-info-content');
+                container.innerHTML = `<div class="alert alert-error">Error loading FTP info: ${error.message}</div>`;
+            }
+        }
+
+        // FTP Search Tab Functions
+        async function performFTPSearch() {
+            const searchTerm = document.getElementById('ftp-search-input').value.trim();
+            if (!searchTerm) {
+                showAlert('error', 'Please enter a search term');
+                return;
+            }
+
+            const resultsContainer = document.getElementById('ftp-search-results');
+            resultsContainer.innerHTML = '<div style="text-align: center; padding: 20px;"><div class="spinner"></div><p>Searching FTP...</p></div>';
+
+            try {
+                const response = await fetch('/api/manual_search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ search_term: searchTerm })
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    showAlert('error', data.error || 'Search failed');
+                    resultsContainer.innerHTML = '';
+                    return;
+                }
+
+                const results = data.results || [];
+
+                if (results.length === 0) {
+                    resultsContainer.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 20px;">No files found matching your search.</p>';
+                    return;
+                }
+
+                let html = `
+                    <h3 style="margin-bottom: 15px;">Found ${results.length} result(s)</h3>
+                    <div style="background: #f9fafb; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <p style="font-size: 13px; color: #6b7280;">Select a file to download it to the output directory.</p>
+                    </div>
+                `;
+
+                results.forEach(result => {
+                    html += `
+                        <div class="search-result-item">
+                            <div>
+                                <div><strong>${result.filename}</strong></div>
+                                <div class="search-result-path">${result.path}</div>
+                            </div>
+                            <button class="btn btn-success btn-sm" onclick="downloadFTPFile('${result.path}', '${result.filename}')">
+                                Download
+                            </button>
+                        </div>
+                    `;
+                });
+
+                resultsContainer.innerHTML = html;
+            } catch (error) {
+                showAlert('error', 'Search error: ' + error.message);
+                resultsContainer.innerHTML = '';
+            }
+        }
+
+        async function downloadFTPFile(ftpPath, ftpFilename) {
+            if (!confirm(`Download "${ftpFilename}" from FTP?`)) return;
+
+            try {
+                // Create a temporary spot for download
+                const tempSpot = {
+                    house_id: ftpFilename,
+                    ad_id: ftpFilename,
+                    duration: '00:00:00',
+                    source: 'Manual FTP Download',
+                    ftp_path: ftpPath,
+                    ftp_filename: ftpFilename,
+                    line_num: Date.now() // Use timestamp as unique line number
+                };
+
+                const response = await fetch('/api/approve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: currentSession || 'manual',
+                        spot: tempSpot
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert('success', `Download queued: ${ftpFilename}`);
+                    startQueueMonitoring();
+                    // Switch to queue tab
+                    switchMainTab('queue');
+                    // Update button to show it's active
+                    const mainTabButtons = document.querySelectorAll('#main-content-section > .tab-buttons .tab-btn');
+                    mainTabButtons.forEach(btn => btn.classList.remove('active'));
+                    mainTabButtons[1].classList.add('active'); // Queue is second button
+                } else {
+                    showAlert('error', 'Download failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                showAlert('error', 'Download error: ' + error.message);
+            }
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('active');
+            }
+        }
+
+        // Results batch operations
+        function toggleResultsSelection(lineNum) {
+            if (selectedResultsItems.has(lineNum)) {
+                selectedResultsItems.delete(lineNum);
+            } else {
+                selectedResultsItems.add(lineNum);
+            }
+            updateResultsBatchActionsVisibility();
+        }
+
+        function updateResultsBatchActionsVisibility() {
+            const batchActions = document.getElementById('results-batch-actions');
+            if (selectedResultsItems.size > 0) {
+                batchActions.style.display = 'flex';
+            } else {
+                batchActions.style.display = 'none';
+            }
+        }
+
+        function clearResultsSelection() {
+            selectedResultsItems.clear();
+            displayResults();
+        }
+
+        async function batchAddToWatchlist() {
+            if (selectedResultsItems.size === 0) return;
+
+            const items = Array.from(selectedResultsItems);
+            let successCount = 0;
+
+            for (const lineNum of items) {
+                const spot = spotsData.find(s => s.line_num === lineNum);
+                if (!spot) continue;
+
+                try {
+                    const response = await fetch('/api/watchlist', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            house_id: spot.house_id,
+                            ad_id: spot.ad_id,
+                            duration: spot.duration,
+                            source: spot.source,
+                            exclude: false
+                        })
+                    });
+
+                    if (response.ok) {
+                        successCount++;
+                    }
+                } catch (error) {
+                    console.error(`Error adding ${spot.house_id} to watchlist:`, error);
+                }
+            }
+
+            showAlert('success', `Added ${successCount} item(s) to watchlist`);
+            selectedResultsItems.clear();
+            updateResultsBatchActionsVisibility();
+        }
+
+        // Auto-select directory name to full name field
+        document.getElementById('new-mapping-directory')?.addEventListener('change', function() {
+            const fullNameInput = document.getElementById('new-mapping-full');
+            if (this.value && !fullNameInput.value) {
+                fullNameInput.value = this.value.replace(/_/g, ' ').replace(/-/g, ' ');
+            }
+        });
+
+        // FTP search - submit on Enter key
+        document.getElementById('ftp-search-input')?.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                performFTPSearch();
+            }
+        });
+    </script>
+</body>
+</html>
