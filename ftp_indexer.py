@@ -29,7 +29,7 @@ FTP_USER = 'creative'
 FTP_PASS = 'MMxhZtqv6!'
 FTP_SEARCH_DIRS = ['/MDSDublist-Commercial_Content_Upload', '/Lilly_Archive']
 
-DATA_FOLDER = '/mnt/ingest/Dubs/Data'
+DATA_FOLDER = '/mnt/IngestNew/Dubs/Data'
 INDEX_FILE = os.path.join(DATA_FOLDER, 'ftp_index.json')
 INDEX_LOCK_FILE = os.path.join(DATA_FOLDER, 'ftp_index.lock')
 
