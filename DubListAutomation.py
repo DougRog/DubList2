@@ -569,58 +569,115 @@ def process_download_job(job_id):
             job['status'] = 'downloading'
             job['progress'] = 10
             job['message'] = 'Connecting to FTP...'
-        
-        # Download file
-        filename = os.path.basename(job['ftp_path'])
+
+        ftp_path = job['ftp_path']
+        filename = os.path.basename(ftp_path)
         temp_path = os.path.join(DOWNLOAD_DIR, f"temp_{job_id}_{filename}")
-        
+
         with queue_lock:
             job['progress'] = 30
             job['message'] = 'Downloading file...'
-        
+
         ftp = FTP()
         ftp.connect(FTP_HOST, FTP_PORT, timeout=60)
         ftp.login(FTP_USER, FTP_PASS)
-        
-        with open(temp_path, 'wb') as f:
-            ftp.retrbinary(f'RETR {job["ftp_path"]}', f.write)
-        
+
+        try:
+            with open(temp_path, 'wb') as f:
+                ftp.retrbinary(f'RETR {ftp_path}', f.write)
+        except Exception as retr_err:
+            # 550 = file not found — it was in the index but got moved/deleted
+            if '550' in str(retr_err):
+                print(f"File not found at indexed path, re-searching: {ftp_path}")
+                with queue_lock:
+                    job['progress'] = 15
+                    job['message'] = 'File moved/deleted, re-searching index...'
+
+                # Clean up partial temp file
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+
+                # Re-search using ad_id then house_id
+                search_terms = [job['ad_id'], job['house_id']]
+                search_terms = [t for t in search_terms if t and t.strip()]
+                new_path = None
+
+                for term in search_terms:
+                    results = search_ftp_index(term, job.get('source'))
+                    matches = results.get('exact', []) or results.get('partial', [])
+                    for m in matches:
+                        if m['path'] != ftp_path:  # Skip the stale path
+                            new_path = m['path']
+                            break
+                    if new_path:
+                        break
+
+                if not new_path:
+                    raise Exception(f'File no longer on FTP server: {filename}')
+
+                # Retry download with the new path
+                print(f"Found alternate path: {new_path}")
+                filename = os.path.basename(new_path)
+                temp_path = os.path.join(DOWNLOAD_DIR, f"temp_{job_id}_{filename}")
+
+                with queue_lock:
+                    job['ftp_path'] = new_path
+                    job['ftp_filename'] = filename
+                    job['progress'] = 30
+                    job['message'] = f'Downloading from alternate path...'
+
+                # Reconnect in case the previous error closed the session
+                try:
+                    ftp.quit()
+                except Exception:
+                    pass
+                ftp = FTP()
+                ftp.connect(FTP_HOST, FTP_PORT, timeout=60)
+                ftp.login(FTP_USER, FTP_PASS)
+
+                with open(temp_path, 'wb') as f:
+                    ftp.retrbinary(f'RETR {new_path}', f.write)
+            else:
+                raise
+
         ftp.quit()
-        
+
         with queue_lock:
             job['status'] = 'validating'
             job['progress'] = 60
             job['message'] = 'Validating duration...'
             job['local_path'] = temp_path
-        
+
         # Validate duration
         actual_duration = get_video_duration(temp_path)
-        
+
         with queue_lock:
             job['actual_duration'] = actual_duration
             job['duration_match'] = check_duration_match(job['expected_duration'], actual_duration)
             job['progress'] = 80
             job['message'] = 'Renaming and transferring...'
-        
+
         # Rename using House ID
         house_id = job['house_id']
         extension = os.path.splitext(filename)[1]
         new_filename = f"{house_id}{extension}"
         final_path = os.path.join(WATCH_FOLDER, new_filename)
-        
+
         # Move to watch folder
         shutil.move(temp_path, final_path)
-        
+
         with queue_lock:
             job['status'] = 'completed'
             job['progress'] = 100
             job['final_path'] = final_path
-            
+
             if job['duration_match']:
                 job['message'] = f'✓ Complete - Duration matches ({actual_duration})'
             else:
                 job['message'] = f'⚠ Complete - Duration mismatch (Expected: {job["expected_duration"]}, Actual: {actual_duration})'
-        
+
     except Exception as e:
         with queue_lock:
             job = download_queue.get(job_id)
