@@ -262,18 +262,34 @@ def build_ftp_index():
             ftp.cwd(directory)
             items = []
 
-            # Try MLSD first
+            # Try MLSD first (modern, gives structured data), fall back to DIR
             try:
-                for name, facts in ftp.mlsd():
+                mlsd_items = list(ftp.mlsd())
+                for name, facts in mlsd_items:
                     if name in ['.', '..']:
                         continue
-                    is_dir = facts.get('type') == 'dir'
-                    item_line = f"{'d' if is_dir else '-'}--------- 1 user group 0 Jan 01 00:00 {name}"
-                    items.append(item_line)
+                    entry_type = facts.get('type', '').lower()
+                    is_dir = entry_type in ('dir', 'cdir', 'pdir') or entry_type == ''
+                    if entry_type == '':
+                        try:
+                            ftp.cwd(f"{directory}/{name}")
+                            ftp.cwd(directory)
+                            is_dir = True
+                        except Exception:
+                            is_dir = False
+                    items.append({'name': name, 'is_dir': is_dir})
             except:
                 # MLSD failed, try DIR
                 try:
-                    ftp.dir(items.append)
+                    raw_lines = []
+                    ftp.dir(raw_lines.append)
+                    for item in raw_lines:
+                        parts = item.split()
+                        if len(parts) < 9:
+                            continue
+                        item_name = ' '.join(parts[8:])
+                        is_dir_flag = item.startswith('d')
+                        items.append({'name': item_name, 'is_dir': is_dir_flag})
                 except Exception as e:
                     # Check if it's a connection error
                     if 'Broken pipe' in str(e) or 'Connection reset' in str(e):
@@ -285,13 +301,9 @@ def build_ftp_index():
                     print(f"  Cannot list {directory}: {e}")
                     return
 
-            for item in items:
-                parts = item.split()
-                if len(parts) < 9:
-                    continue
-
-                item_name = ' '.join(parts[8:])
-                is_dir = item.startswith('d')
+            for entry in items:
+                item_name = entry['name']
+                is_dir = entry['is_dir']
 
                 if is_dir:
                     if any(char in item_name for char in ['?', '*', '"', '<', '>', '|']):
@@ -1206,6 +1218,15 @@ def add_to_watchlist():
         save_watchlist()
 
     return jsonify({'success': True, 'message': f'Added {house_id} to watchlist'})
+
+@app.route('/api/watchlist/clear', methods=['DELETE'])
+def clear_watchlist():
+    """Remove all items from watchlist"""
+    with watchlist_lock:
+        count = len(watchlist)
+        watchlist.clear()
+        save_watchlist()
+    return jsonify({'success': True, 'message': f'Removed all {count} item(s) from watchlist'})
 
 @app.route('/api/watchlist/<house_id>', methods=['DELETE'])
 def remove_from_watchlist(house_id):

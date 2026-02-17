@@ -121,17 +121,36 @@ class FTPIndexer:
             self.ftp.cwd(directory)
             items = []
 
-            # Try MLSD first (modern), fall back to DIR (legacy)
+            # Try MLSD first (modern, gives structured data), fall back to DIR
+            use_mlsd = True
             try:
-                for name, facts in self.ftp.mlsd():
+                mlsd_items = list(self.ftp.mlsd())
+                for name, facts in mlsd_items:
                     if name in ['.', '..']:
                         continue
-                    is_dir = facts.get('type') == 'dir'
-                    item_line = f"{'d' if is_dir else '-'}--------- 1 user group 0 Jan 01 00:00 {name}"
-                    items.append(item_line)
+                    entry_type = facts.get('type', '').lower()
+                    is_dir = entry_type in ('dir', 'cdir', 'pdir') or entry_type == ''
+                    # If type is missing/empty, try to cwd into it to detect directories
+                    if entry_type == '':
+                        try:
+                            self.ftp.cwd(f"{directory}/{name}")
+                            self.ftp.cwd(directory)
+                            is_dir = True
+                        except Exception:
+                            is_dir = False
+                    items.append({'name': name, 'is_dir': is_dir})
             except Exception:
+                use_mlsd = False
                 try:
-                    self.ftp.dir(items.append)
+                    raw_lines = []
+                    self.ftp.dir(raw_lines.append)
+                    for item in raw_lines:
+                        parts = item.split()
+                        if len(parts) < 9:
+                            continue
+                        item_name = ' '.join(parts[8:])
+                        is_dir = item.startswith('d')
+                        items.append({'name': item_name, 'is_dir': is_dir})
                 except Exception as e:
                     if self._is_connection_error(e) and retry_count < MAX_RETRIES:
                         log.warning(f"Connection error in {directory}, retry {retry_count + 1}/{MAX_RETRIES}")
@@ -143,13 +162,9 @@ class FTPIndexer:
                     self.stats['errors'] += 1
                     return
 
-            for item in items:
-                parts = item.split()
-                if len(parts) < 9:
-                    continue
-
-                item_name = ' '.join(parts[8:])
-                is_dir = item.startswith('d')
+            for entry in items:
+                item_name = entry['name']
+                is_dir = entry['is_dir']
 
                 if is_dir:
                     if any(c in item_name for c in ['?', '*', '"', '<', '>', '|']):

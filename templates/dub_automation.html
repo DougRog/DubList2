@@ -787,6 +787,7 @@
             </div>
             <div style="margin-bottom: 20px;">
                 <button class="btn btn-primary" onclick="checkWatchlist()">🔍 Check for Matches Now</button>
+                <button class="btn btn-danger" onclick="removeAllWatchlist()" style="margin-left: 10px;">Remove All</button>
                 <span id="watchlist-status" style="margin-left: 15px; color: #6b7280;"></span>
             </div>
             <div class="batch-actions" id="batch-actions" style="display: none;">
@@ -896,16 +897,18 @@
                     // Start FTP search
                     await searchAllSpots();
                 } else {
+                    hideLoading();
                     showAlert('error', data.error || 'Upload failed');
                 }
             } catch (error) {
+                hideLoading();
                 showAlert('error', 'Upload error: ' + error.message);
             }
         }
-        
+
         async function searchAllSpots() {
             showLoading('Searching FTP for matches...');
-            
+
             try {
                 const response = await fetch('/api/search_all', {
                     method: 'POST',
@@ -915,14 +918,14 @@
                         spots: spotsData
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     // Store search results
                     data.results.forEach(result => {
                         searchResults[result.line_num] = result.match;
-                        
+
                         // Update spot data
                         const spot = spotsData.find(s => s.line_num === result.line_num);
                         if (spot) {
@@ -939,7 +942,7 @@
                             }
                         }
                     });
-                    
+
                     hideLoading();
                     displayResults();
                     updateStats();
@@ -947,9 +950,11 @@
                     // Show main content section
                     document.getElementById('main-content-section').classList.remove('hidden');
                 } else {
+                    hideLoading();
                     showAlert('error', 'Search failed: ' + data.error);
                 }
             } catch (error) {
+                hideLoading();
                 showAlert('error', 'Search error: ' + error.message);
             }
         }
@@ -1646,6 +1651,28 @@
             showAlert('success', `Removed ${successCount} item(s) from watchlist`);
             selectedWatchlistItems.clear();
             await loadWatchlist();
+        }
+
+        async function removeAllWatchlist() {
+            if (!confirm('Remove ALL items from the watchlist?')) return;
+
+            try {
+                const response = await fetch('/api/watchlist/clear', {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert('success', data.message);
+                    selectedWatchlistItems.clear();
+                    await loadWatchlist();
+                } else {
+                    showAlert('error', data.error || 'Failed to clear watchlist');
+                }
+            } catch (error) {
+                showAlert('error', 'Error clearing watchlist: ' + error.message);
+            }
         }
 
         async function toggleWatchlistExclude(houseId, exclude) {
