@@ -1,0 +1,98 @@
+================================================================================
+  DUB AUTOMATION SYSTEM - GETTING STARTED
+  Created: November 2025
+  For: Lilly Broadcasting
+================================================================================
+
+WHAT YOU HAVE
+-------------
+✓ Complete DUB automation workflow system
+✓ Web-based interface with modern UI  
+✓ FTP search with exact/partial/fuzzy matching
+✓ Download queue with real-time progress
+✓ Duration validation using ffprobe
+✓ Automatic file renaming (House ID)
+✓ Comprehensive HTML reports
+✓ Source name mapping system
+
+FILES CREATED
+------------
+Core Application:
+  • dub_automation.py (33 KB)     - Main Flask server
+  • templates/dub_automation.html - Web interface  
+  • start.sh                      - Startup script
+  • requirements.txt              - Python dependencies
+
+Documentation:
+  • DEPLOYMENT_GUIDE.md          - Step-by-step deployment
+  • SYSTEM_OVERVIEW.md           - Complete system explanation
+  • DUB_AUTOMATION_README.md     - Technical documentation
+  
+QUICK START (3 Steps)
+--------------------
+1. Edit Configuration:
+   - Open dub_automation.py
+   - Update FTP_HOST, FTP_USER, FTP_PASS (lines 17-20)
+   - Update directory paths if needed (lines 10-14)
+
+2. Run Startup Script:
+   chmod +x start.sh
+   ./start.sh
+
+3. Open Browser:
+   http://localhost:7020
+
+WORKFLOW SUMMARY
+---------------
+1. Upload DUB file (drag & drop)
+2. System searches FTP automatically
+3. Review and approve matches
+4. Monitor download queue
+5. Files validated and renamed
+6. Files moved to watch folder
+7. Generate report
+
+KEY FEATURES
+-----------
+✓ Three-tier FTP matching (exact/partial/fuzzy)
+✓ Bulk approve all exact matches
+✓ Real-time queue monitoring
+✓ Duration validation (±1 sec tolerance)  
+✓ Automatic file renaming to House ID
+✓ Professional HTML reports
+✓ Source name mapping
+✓ Missing file management
+
+DIRECTORIES USED
+---------------
+/mnt/ingest/Dubs/
+  ├── Uploads/      - DUB files
+  ├── Downloaded/   - Temp downloads
+  ├── Watch/        - Final files for encoding
+  ├── Data/         - Session data
+  └── Reports/      - Generated reports
+
+DEPENDENCIES
+-----------
+• Python 3.8+
+• Flask & Werkzeug
+• ffprobe (for duration validation)
+• FTP access to creative server
+
+NEXT STEPS
+---------
+1. Read DEPLOYMENT_GUIDE.md for detailed setup
+2. Review SYSTEM_OVERVIEW.md for workflow examples
+3. Test with small DUB file (5-10 spots)
+4. Train users on web interface
+5. Set up production deployment (systemd)
+
+SUPPORT
+-------
+📖 Documentation: See all .md files in this directory
+🐛 Troubleshooting: Check DEPLOYMENT_GUIDE.md
+📧 Contact: broadcast-engineering@lillybroadcasting.com
+
+================================================================================
+You're ready to automate your dubbing workflow! 🚀
+================================================================================
