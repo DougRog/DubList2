@@ -19,11 +19,11 @@ app.secret_key = 'dub-automation-secret-key-2025'
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
 
 # Configuration
-BASE_UPLOAD_DIR = '/mnt/ingest/Dubs/Uploads'
-DOWNLOAD_DIR = '/mnt/ingest/Dubs/Downloaded'
-WATCH_FOLDER = '/mnt/ingest/Dubs/Watch'
-DATA_FOLDER = '/mnt/ingest/Dubs/Data'
-REPORTS_FOLDER = '/mnt/ingest/Dubs/Reports'
+BASE_UPLOAD_DIR = '/mnt/IngestNew/Dubs/Uploads'
+DOWNLOAD_DIR = '/mnt/IngestNew/Dubs/Downloaded'
+WATCH_FOLDER = '/mnt/IngestNew/Dubs/Watch'
+DATA_FOLDER = '/mnt/IngestNew/Dubs/Data'
+REPORTS_FOLDER = '/mnt/IngestNew/Dubs/Reports'
 
 # FTP Configuration
 FTP_HOST = '192.168.0.198'
@@ -1381,4 +1381,4 @@ if __name__ == '__main__':
     print(f"Server: http://0.0.0.0:8500")
     print("="*60 + "\n")
 
-    app.run(debug=True, host='0.0.0.0', port=8500, use_reloader=False, threaded=True)
+    app.run(debug=True, host='0.0.0.0', port=9900, use_reloader=False, threaded=True)
