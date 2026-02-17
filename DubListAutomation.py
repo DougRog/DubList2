@@ -60,6 +60,7 @@ ftp_index_timestamp = None
 ftp_index_directories = set()  # Track all directories found during indexing
 ftp_index_progress = {'status': 'idle', 'current_dir': '', 'files_found': 0, 'progress': 0}
 INDEX_REFRESH_HOURS = 1
+INDEX_FILE = os.path.join(DATA_FOLDER, 'ftp_index.json')  # Written by ftp_indexer.py
 download_queue = {}  # job_id -> job_info
 queue_lock = threading.Lock()
 watchlist = {}  # house_id -> watchlist_item
@@ -369,18 +370,63 @@ def build_ftp_index():
         ftp_index_timestamp = datetime.now()
         ftp_index_progress = {'status': 'error', 'current_dir': '', 'files_found': len(ftp_index), 'progress': 0, 'error': str(e)}
 
+def load_ftp_index_from_disk():
+    """Load the FTP index from the JSON file written by ftp_indexer.py"""
+    global ftp_index, ftp_index_timestamp, ftp_index_directories, ftp_index_progress
+
+    if not os.path.exists(INDEX_FILE):
+        return False
+
+    try:
+        with open(INDEX_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        ftp_index = data.get('index', [])
+        ftp_index_directories = set(data.get('directories', []))
+        ftp_index_timestamp = datetime.fromisoformat(data['timestamp'])
+        ftp_index_progress = {
+            'status': 'complete',
+            'current_dir': '',
+            'files_found': data.get('file_count', len(ftp_index)),
+            'progress': 100
+        }
+
+        age = (datetime.now() - ftp_index_timestamp).total_seconds()
+        print(f"Loaded FTP index from disk: {len(ftp_index)} files ({age:.0f}s old)")
+        return True
+
+    except Exception as e:
+        print(f"Error loading FTP index from disk: {e}")
+        return False
+
+
 def get_ftp_index():
-    """Get FTP index, refreshing if needed"""
+    """Get FTP index - loads from disk file first, falls back to live FTP scan"""
     global ftp_index_timestamp
-    
+
     if not ftp_index or not ftp_index_timestamp:
-        build_ftp_index()
-    else:
-        age = datetime.now() - ftp_index_timestamp
-        if age.total_seconds() > (INDEX_REFRESH_HOURS * 3600):
-            print("FTP index is stale, refreshing...")
+        # Try loading from disk first (written by ftp_indexer.py)
+        if not load_ftp_index_from_disk():
+            print("No index file found on disk, building from FTP...")
             build_ftp_index()
-    
+    else:
+        # Check if the disk file is newer than what we have in memory
+        if os.path.exists(INDEX_FILE):
+            try:
+                file_mtime = datetime.fromtimestamp(os.path.getmtime(INDEX_FILE))
+                if file_mtime > ftp_index_timestamp:
+                    load_ftp_index_from_disk()
+            except Exception:
+                pass
+
+        # If the index is very old AND no disk file, fall back to live scan
+        if ftp_index_timestamp:
+            age = datetime.now() - ftp_index_timestamp
+            if age.total_seconds() > (INDEX_REFRESH_HOURS * 3600):
+                if not load_ftp_index_from_disk():
+                    print("FTP index is stale and no disk file, refreshing from FTP...")
+                    build_ftp_index()
+
     return ftp_index
 
 def search_ftp_index(search_term, source_filter=None):
@@ -1069,10 +1115,21 @@ def download_report(filename):
 
 @app.route('/api/refresh_ftp_index', methods=['POST'])
 def refresh_ftp_index():
-    """Manually refresh FTP index"""
+    """Refresh FTP index - reloads from disk if available, otherwise scans FTP live"""
     try:
-        threading.Thread(target=build_ftp_index, daemon=True).start()
-        return jsonify({'success': True, 'message': 'FTP index refresh started'})
+        if load_ftp_index_from_disk():
+            return jsonify({
+                'success': True,
+                'message': f'Index reloaded from disk: {len(ftp_index)} files',
+                'source': 'disk'
+            })
+        else:
+            threading.Thread(target=build_ftp_index, daemon=True).start()
+            return jsonify({
+                'success': True,
+                'message': 'No disk index found, FTP scan started in background',
+                'source': 'ftp'
+            })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1302,9 +1359,12 @@ def periodic_watchlist_check():
             traceback.print_exc()
 
 if __name__ == '__main__':
-    # Build FTP index on startup
-    print("Building initial FTP index...")
-    threading.Thread(target=build_ftp_index, daemon=True).start()
+    # Try loading pre-built index from disk (written by ftp_indexer.py)
+    if not load_ftp_index_from_disk():
+        print("No pre-built index found, building from FTP (run ftp_indexer.py for faster startups)...")
+        threading.Thread(target=build_ftp_index, daemon=True).start()
+    else:
+        print(f"Loaded pre-built index: {len(ftp_index)} files ready")
 
     # Start periodic watchlist checking
     print("Starting periodic watchlist checker...")
@@ -1317,6 +1377,7 @@ if __name__ == '__main__':
     print(f"Download Directory: {DOWNLOAD_DIR}")
     print(f"Watch Folder: {WATCH_FOLDER}")
     print(f"Reports Folder: {REPORTS_FOLDER}")
+    print(f"Index File: {INDEX_FILE}")
     print(f"Server: http://0.0.0.0:8500")
     print("="*60 + "\n")
 

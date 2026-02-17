@@ -1,0 +1,17 @@
+[Unit]
+Description=DubList FTP Indexer - Scans FTP every 15 minutes
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/user/DubList2
+ExecStart=/usr/bin/python3 /home/user/DubList2/ftp_indexer.py
+Restart=always
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ftp-indexer
+
+[Install]
+WantedBy=multi-user.target
