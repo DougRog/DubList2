@@ -608,6 +608,7 @@
             <button class="btn btn-secondary" onclick="openFTPInfoModal()">📊 FTP Index Info</button>
             <button class="btn btn-secondary" onclick="openWatchlistModal()">📋 Watchlist</button>
             <button class="btn btn-secondary" onclick="openSourceMappingsModal()">⚙️ Source Mappings</button>
+            <button class="btn btn-secondary" onclick="openSettingsModal()">🔧 Settings</button>
         </div>
     </div>
     
@@ -812,6 +813,36 @@
                     <div class="spinner"></div>
                     <p>Loading index information...</p>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="modal-close" onclick="closeModal('settings-modal')">&times;</button>
+            </div>
+            <div style="padding: 10px 0;">
+                <h3 style="margin: 0 0 15px 0; color: #374151; font-size: 16px;">FTP Post-Download</h3>
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500;">
+                        <input type="checkbox" id="setting-ftp-move-enabled" onchange="saveSettings()" style="width: 18px; height: 18px; cursor: pointer;">
+                        Move file on FTP after download
+                    </label>
+                </div>
+                <div id="ftp-move-dest-group" style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #374151;">Destination directory on FTP</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="setting-ftp-move-dest" placeholder="/Downloaded" style="flex: 1; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px;">
+                        <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+                    </div>
+                    <p style="margin: 8px 0 0 0; font-size: 12px; color: #6b7280;">
+                        After a successful download, the original file on the FTP will be moved to this directory. The directory will be created if it doesn't exist.
+                    </p>
+                </div>
+                <div id="settings-status" style="color: #6b7280; font-size: 13px;"></div>
             </div>
         </div>
     </div>
@@ -1738,6 +1769,61 @@
                 }
             } catch (error) {
                 statusEl.textContent = 'Error: ' + error.message;
+            }
+        }
+
+        // Settings Modal
+        async function openSettingsModal() {
+            openModal('settings-modal');
+            await loadSettings();
+        }
+
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                const data = await response.json();
+                const s = data.settings;
+
+                document.getElementById('setting-ftp-move-enabled').checked = s.ftp_move_after_download || false;
+                document.getElementById('setting-ftp-move-dest').value = s.ftp_move_destination || '/Downloaded';
+                updateMoveDestVisibility();
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        }
+
+        function updateMoveDestVisibility() {
+            const enabled = document.getElementById('setting-ftp-move-enabled').checked;
+            document.getElementById('ftp-move-dest-group').style.opacity = enabled ? '1' : '0.5';
+            document.getElementById('setting-ftp-move-dest').disabled = !enabled;
+        }
+
+        async function saveSettings() {
+            updateMoveDestVisibility();
+
+            const settings = {
+                ftp_move_after_download: document.getElementById('setting-ftp-move-enabled').checked,
+                ftp_move_destination: document.getElementById('setting-ftp-move-dest').value.trim() || '/Downloaded'
+            };
+
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(settings)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    const status = document.getElementById('settings-status');
+                    status.textContent = 'Settings saved.';
+                    setTimeout(() => { status.textContent = ''; }, 3000);
+                } else {
+                    showAlert('error', data.error || 'Failed to save settings');
+                }
+            } catch (error) {
+                showAlert('error', 'Error saving settings: ' + error.message);
             }
         }
 

@@ -114,6 +114,35 @@ def save_watchlist():
 
 load_watchlist()
 
+# App settings (persisted to disk)
+app_settings = {
+    'ftp_move_after_download': False,
+    'ftp_move_destination': '/Downloaded'
+}
+
+def load_app_settings():
+    global app_settings
+    try:
+        settings_file = os.path.join(DATA_FOLDER, 'app_settings.json')
+        if os.path.exists(settings_file):
+            with open(settings_file, 'r', encoding='utf-8') as f:
+                loaded = json.load(f)
+                app_settings.update(loaded)
+    except Exception as e:
+        print(f"Error loading app settings: {e}")
+
+def save_app_settings():
+    try:
+        settings_file = os.path.join(DATA_FOLDER, 'app_settings.json')
+        with open(settings_file, 'w', encoding='utf-8') as f:
+            json.dump(app_settings, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"Error saving app settings: {e}")
+        return False
+
+load_app_settings()
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -642,7 +671,8 @@ def process_download_job(job_id):
             else:
                 raise
 
-        ftp.quit()
+        # Keep track of the downloaded FTP path for the move step
+        downloaded_ftp_path = job['ftp_path']
 
         with queue_lock:
             job['status'] = 'validating'
@@ -667,6 +697,42 @@ def process_download_job(job_id):
 
         # Move to watch folder
         shutil.move(temp_path, final_path)
+
+        # Move file on FTP server if enabled
+        if app_settings.get('ftp_move_after_download'):
+            dest_dir = app_settings.get('ftp_move_destination', '/Downloaded').rstrip('/')
+            ftp_filename = os.path.basename(downloaded_ftp_path)
+            dest_path = f"{dest_dir}/{ftp_filename}"
+
+            with queue_lock:
+                job['progress'] = 90
+                job['message'] = f'Moving file on FTP to {dest_dir}/...'
+
+            try:
+                # Reconnect for the move (download may have closed the session)
+                try:
+                    ftp.pwd()
+                except Exception:
+                    ftp = FTP()
+                    ftp.connect(FTP_HOST, FTP_PORT, timeout=60)
+                    ftp.login(FTP_USER, FTP_PASS)
+
+                # Ensure destination directory exists
+                try:
+                    ftp.cwd(dest_dir)
+                except Exception:
+                    ftp.mkd(dest_dir)
+
+                ftp.rename(downloaded_ftp_path, dest_path)
+                print(f"FTP move: {downloaded_ftp_path} -> {dest_path}")
+            except Exception as move_err:
+                # Log but don't fail the job — the download itself succeeded
+                print(f"Warning: FTP move failed for {ftp_filename}: {move_err}")
+
+        try:
+            ftp.quit()
+        except Exception:
+            pass
 
         with queue_lock:
             job['status'] = 'completed'
@@ -1231,6 +1297,25 @@ def delete_source_mapping_route(abbreviated):
         return jsonify({'success': True, 'message': f'Mapping deleted: {abbreviated}'})
     else:
         return jsonify({'error': 'Mapping not found'}), 404
+
+@app.route('/api/settings', methods=['GET'])
+def get_app_settings():
+    """Get current app settings"""
+    return jsonify({'settings': app_settings})
+
+@app.route('/api/settings', methods=['POST'])
+def update_app_settings():
+    """Update app settings"""
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    for key in data:
+        if key in app_settings:
+            app_settings[key] = data[key]
+
+    save_app_settings()
+    return jsonify({'success': True, 'settings': app_settings})
 
 @app.route('/api/ftp_progress')
 def get_ftp_progress():
