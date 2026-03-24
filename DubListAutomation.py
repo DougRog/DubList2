@@ -19,11 +19,11 @@ app.secret_key = 'dub-automation-secret-key-2025'
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
 
 # Configuration
-BASE_UPLOAD_DIR = '/mnt/ingest/Dubs/Uploads'
-DOWNLOAD_DIR = '/mnt/ingest/Dubs/Downloaded'
-WATCH_FOLDER = '/mnt/ingest/Dubs/Watch'
-DATA_FOLDER = '/mnt/ingest/Dubs/Data'
-REPORTS_FOLDER = '/mnt/ingest/Dubs/Reports'
+BASE_UPLOAD_DIR = '/mnt/IngestNew/Dubs/Uploads'
+DOWNLOAD_DIR = '/mnt/IngestNew/Dubs/Downloaded'
+WATCH_FOLDER = '/mnt/IngestNew/Dubs/Watch'
+DATA_FOLDER = '/mnt/IngestNew/Dubs/Data'
+REPORTS_FOLDER = '/mnt/IngestNew/Dubs/Reports'
 
 # FTP Configuration
 FTP_HOST = '192.168.0.198'
@@ -60,6 +60,7 @@ ftp_index_timestamp = None
 ftp_index_directories = set()  # Track all directories found during indexing
 ftp_index_progress = {'status': 'idle', 'current_dir': '', 'files_found': 0, 'progress': 0}
 INDEX_REFRESH_HOURS = 1
+INDEX_FILE = os.path.join(DATA_FOLDER, 'ftp_index.json')  # Written by ftp_indexer.py
 download_queue = {}  # job_id -> job_info
 queue_lock = threading.Lock()
 watchlist = {}  # house_id -> watchlist_item
@@ -112,6 +113,35 @@ def save_watchlist():
         return False
 
 load_watchlist()
+
+# App settings (persisted to disk)
+app_settings = {
+    'ftp_move_after_download': False,
+    'ftp_move_destination': '/Downloaded'
+}
+
+def load_app_settings():
+    global app_settings
+    try:
+        settings_file = os.path.join(DATA_FOLDER, 'app_settings.json')
+        if os.path.exists(settings_file):
+            with open(settings_file, 'r', encoding='utf-8') as f:
+                loaded = json.load(f)
+                app_settings.update(loaded)
+    except Exception as e:
+        print(f"Error loading app settings: {e}")
+
+def save_app_settings():
+    try:
+        settings_file = os.path.join(DATA_FOLDER, 'app_settings.json')
+        with open(settings_file, 'w', encoding='utf-8') as f:
+            json.dump(app_settings, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"Error saving app settings: {e}")
+        return False
+
+load_app_settings()
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -261,18 +291,34 @@ def build_ftp_index():
             ftp.cwd(directory)
             items = []
 
-            # Try MLSD first
+            # Try MLSD first (modern, gives structured data), fall back to DIR
             try:
-                for name, facts in ftp.mlsd():
+                mlsd_items = list(ftp.mlsd())
+                for name, facts in mlsd_items:
                     if name in ['.', '..']:
                         continue
-                    is_dir = facts.get('type') == 'dir'
-                    item_line = f"{'d' if is_dir else '-'}--------- 1 user group 0 Jan 01 00:00 {name}"
-                    items.append(item_line)
+                    entry_type = facts.get('type', '').lower()
+                    is_dir = entry_type in ('dir', 'cdir', 'pdir') or entry_type == ''
+                    if entry_type == '':
+                        try:
+                            ftp.cwd(f"{directory}/{name}")
+                            ftp.cwd(directory)
+                            is_dir = True
+                        except Exception:
+                            is_dir = False
+                    items.append({'name': name, 'is_dir': is_dir})
             except:
                 # MLSD failed, try DIR
                 try:
-                    ftp.dir(items.append)
+                    raw_lines = []
+                    ftp.dir(raw_lines.append)
+                    for item in raw_lines:
+                        parts = item.split()
+                        if len(parts) < 9:
+                            continue
+                        item_name = ' '.join(parts[8:])
+                        is_dir_flag = item.startswith('d')
+                        items.append({'name': item_name, 'is_dir': is_dir_flag})
                 except Exception as e:
                     # Check if it's a connection error
                     if 'Broken pipe' in str(e) or 'Connection reset' in str(e):
@@ -284,13 +330,9 @@ def build_ftp_index():
                     print(f"  Cannot list {directory}: {e}")
                     return
 
-            for item in items:
-                parts = item.split()
-                if len(parts) < 9:
-                    continue
-
-                item_name = ' '.join(parts[8:])
-                is_dir = item.startswith('d')
+            for entry in items:
+                item_name = entry['name']
+                is_dir = entry['is_dir']
 
                 if is_dir:
                     if any(char in item_name for char in ['?', '*', '"', '<', '>', '|']):
@@ -369,18 +411,63 @@ def build_ftp_index():
         ftp_index_timestamp = datetime.now()
         ftp_index_progress = {'status': 'error', 'current_dir': '', 'files_found': len(ftp_index), 'progress': 0, 'error': str(e)}
 
+def load_ftp_index_from_disk():
+    """Load the FTP index from the JSON file written by ftp_indexer.py"""
+    global ftp_index, ftp_index_timestamp, ftp_index_directories, ftp_index_progress
+
+    if not os.path.exists(INDEX_FILE):
+        return False
+
+    try:
+        with open(INDEX_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        ftp_index = data.get('index', [])
+        ftp_index_directories = set(data.get('directories', []))
+        ftp_index_timestamp = datetime.fromisoformat(data['timestamp'])
+        ftp_index_progress = {
+            'status': 'complete',
+            'current_dir': '',
+            'files_found': data.get('file_count', len(ftp_index)),
+            'progress': 100
+        }
+
+        age = (datetime.now() - ftp_index_timestamp).total_seconds()
+        print(f"Loaded FTP index from disk: {len(ftp_index)} files ({age:.0f}s old)")
+        return True
+
+    except Exception as e:
+        print(f"Error loading FTP index from disk: {e}")
+        return False
+
+
 def get_ftp_index():
-    """Get FTP index, refreshing if needed"""
+    """Get FTP index - loads from disk file first, falls back to live FTP scan"""
     global ftp_index_timestamp
-    
+
     if not ftp_index or not ftp_index_timestamp:
-        build_ftp_index()
-    else:
-        age = datetime.now() - ftp_index_timestamp
-        if age.total_seconds() > (INDEX_REFRESH_HOURS * 3600):
-            print("FTP index is stale, refreshing...")
+        # Try loading from disk first (written by ftp_indexer.py)
+        if not load_ftp_index_from_disk():
+            print("No index file found on disk, building from FTP...")
             build_ftp_index()
-    
+    else:
+        # Check if the disk file is newer than what we have in memory
+        if os.path.exists(INDEX_FILE):
+            try:
+                file_mtime = datetime.fromtimestamp(os.path.getmtime(INDEX_FILE))
+                if file_mtime > ftp_index_timestamp:
+                    load_ftp_index_from_disk()
+            except Exception:
+                pass
+
+        # If the index is very old AND no disk file, fall back to live scan
+        if ftp_index_timestamp:
+            age = datetime.now() - ftp_index_timestamp
+            if age.total_seconds() > (INDEX_REFRESH_HOURS * 3600):
+                if not load_ftp_index_from_disk():
+                    print("FTP index is stale and no disk file, refreshing from FTP...")
+                    build_ftp_index()
+
     return ftp_index
 
 def search_ftp_index(search_term, source_filter=None):
@@ -511,58 +598,152 @@ def process_download_job(job_id):
             job['status'] = 'downloading'
             job['progress'] = 10
             job['message'] = 'Connecting to FTP...'
-        
-        # Download file
-        filename = os.path.basename(job['ftp_path'])
+
+        ftp_path = job['ftp_path']
+        filename = os.path.basename(ftp_path)
         temp_path = os.path.join(DOWNLOAD_DIR, f"temp_{job_id}_{filename}")
-        
+
         with queue_lock:
             job['progress'] = 30
             job['message'] = 'Downloading file...'
-        
+
         ftp = FTP()
         ftp.connect(FTP_HOST, FTP_PORT, timeout=60)
         ftp.login(FTP_USER, FTP_PASS)
-        
-        with open(temp_path, 'wb') as f:
-            ftp.retrbinary(f'RETR {job["ftp_path"]}', f.write)
-        
-        ftp.quit()
-        
+
+        try:
+            with open(temp_path, 'wb') as f:
+                ftp.retrbinary(f'RETR {ftp_path}', f.write)
+        except Exception as retr_err:
+            # 550 = file not found — it was in the index but got moved/deleted
+            if '550' in str(retr_err):
+                print(f"File not found at indexed path, re-searching: {ftp_path}")
+                with queue_lock:
+                    job['progress'] = 15
+                    job['message'] = 'File moved/deleted, re-searching index...'
+
+                # Clean up partial temp file
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+
+                # Re-search using ad_id then house_id
+                search_terms = [job['ad_id'], job['house_id']]
+                search_terms = [t for t in search_terms if t and t.strip()]
+                new_path = None
+
+                for term in search_terms:
+                    results = search_ftp_index(term, job.get('source'))
+                    matches = results.get('exact', []) or results.get('partial', [])
+                    for m in matches:
+                        if m['path'] != ftp_path:  # Skip the stale path
+                            new_path = m['path']
+                            break
+                    if new_path:
+                        break
+
+                if not new_path:
+                    raise Exception(f'File no longer on FTP server: {filename}')
+
+                # Retry download with the new path
+                print(f"Found alternate path: {new_path}")
+                filename = os.path.basename(new_path)
+                temp_path = os.path.join(DOWNLOAD_DIR, f"temp_{job_id}_{filename}")
+
+                with queue_lock:
+                    job['ftp_path'] = new_path
+                    job['ftp_filename'] = filename
+                    job['progress'] = 30
+                    job['message'] = f'Downloading from alternate path...'
+
+                # Reconnect in case the previous error closed the session
+                try:
+                    ftp.quit()
+                except Exception:
+                    pass
+                ftp = FTP()
+                ftp.connect(FTP_HOST, FTP_PORT, timeout=60)
+                ftp.login(FTP_USER, FTP_PASS)
+
+                with open(temp_path, 'wb') as f:
+                    ftp.retrbinary(f'RETR {new_path}', f.write)
+            else:
+                raise
+
+        # Keep track of the downloaded FTP path for the move step
+        downloaded_ftp_path = job['ftp_path']
+
         with queue_lock:
             job['status'] = 'validating'
             job['progress'] = 60
             job['message'] = 'Validating duration...'
             job['local_path'] = temp_path
-        
+
         # Validate duration
         actual_duration = get_video_duration(temp_path)
-        
+
         with queue_lock:
             job['actual_duration'] = actual_duration
             job['duration_match'] = check_duration_match(job['expected_duration'], actual_duration)
             job['progress'] = 80
             job['message'] = 'Renaming and transferring...'
-        
+
         # Rename using House ID
         house_id = job['house_id']
         extension = os.path.splitext(filename)[1]
         new_filename = f"{house_id}{extension}"
         final_path = os.path.join(WATCH_FOLDER, new_filename)
-        
+
         # Move to watch folder
         shutil.move(temp_path, final_path)
-        
+
+        # Move file on FTP server if enabled
+        if app_settings.get('ftp_move_after_download'):
+            dest_dir = app_settings.get('ftp_move_destination', '/Downloaded').rstrip('/')
+            ftp_filename = os.path.basename(downloaded_ftp_path)
+            dest_path = f"{dest_dir}/{ftp_filename}"
+
+            with queue_lock:
+                job['progress'] = 90
+                job['message'] = f'Moving file on FTP to {dest_dir}/...'
+
+            try:
+                # Reconnect for the move (download may have closed the session)
+                try:
+                    ftp.pwd()
+                except Exception:
+                    ftp = FTP()
+                    ftp.connect(FTP_HOST, FTP_PORT, timeout=60)
+                    ftp.login(FTP_USER, FTP_PASS)
+
+                # Ensure destination directory exists
+                try:
+                    ftp.cwd(dest_dir)
+                except Exception:
+                    ftp.mkd(dest_dir)
+
+                ftp.rename(downloaded_ftp_path, dest_path)
+                print(f"FTP move: {downloaded_ftp_path} -> {dest_path}")
+            except Exception as move_err:
+                # Log but don't fail the job — the download itself succeeded
+                print(f"Warning: FTP move failed for {ftp_filename}: {move_err}")
+
+        try:
+            ftp.quit()
+        except Exception:
+            pass
+
         with queue_lock:
             job['status'] = 'completed'
             job['progress'] = 100
             job['final_path'] = final_path
-            
+
             if job['duration_match']:
                 job['message'] = f'✓ Complete - Duration matches ({actual_duration})'
             else:
                 job['message'] = f'⚠ Complete - Duration mismatch (Expected: {job["expected_duration"]}, Actual: {actual_duration})'
-        
+
     except Exception as e:
         with queue_lock:
             job = download_queue.get(job_id)
@@ -1069,10 +1250,21 @@ def download_report(filename):
 
 @app.route('/api/refresh_ftp_index', methods=['POST'])
 def refresh_ftp_index():
-    """Manually refresh FTP index"""
+    """Refresh FTP index - reloads from disk if available, otherwise scans FTP live"""
     try:
-        threading.Thread(target=build_ftp_index, daemon=True).start()
-        return jsonify({'success': True, 'message': 'FTP index refresh started'})
+        if load_ftp_index_from_disk():
+            return jsonify({
+                'success': True,
+                'message': f'Index reloaded from disk: {len(ftp_index)} files',
+                'source': 'disk'
+            })
+        else:
+            threading.Thread(target=build_ftp_index, daemon=True).start()
+            return jsonify({
+                'success': True,
+                'message': 'No disk index found, FTP scan started in background',
+                'source': 'ftp'
+            })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1105,6 +1297,25 @@ def delete_source_mapping_route(abbreviated):
         return jsonify({'success': True, 'message': f'Mapping deleted: {abbreviated}'})
     else:
         return jsonify({'error': 'Mapping not found'}), 404
+
+@app.route('/api/settings', methods=['GET'])
+def get_app_settings():
+    """Get current app settings"""
+    return jsonify({'settings': app_settings})
+
+@app.route('/api/settings', methods=['POST'])
+def update_app_settings():
+    """Update app settings"""
+    data = request.json
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    for key in data:
+        if key in app_settings:
+            app_settings[key] = data[key]
+
+    save_app_settings()
+    return jsonify({'success': True, 'settings': app_settings})
 
 @app.route('/api/ftp_progress')
 def get_ftp_progress():
@@ -1149,6 +1360,15 @@ def add_to_watchlist():
         save_watchlist()
 
     return jsonify({'success': True, 'message': f'Added {house_id} to watchlist'})
+
+@app.route('/api/watchlist/clear', methods=['DELETE'])
+def clear_watchlist():
+    """Remove all items from watchlist"""
+    with watchlist_lock:
+        count = len(watchlist)
+        watchlist.clear()
+        save_watchlist()
+    return jsonify({'success': True, 'message': f'Removed all {count} item(s) from watchlist'})
 
 @app.route('/api/watchlist/<house_id>', methods=['DELETE'])
 def remove_from_watchlist(house_id):
@@ -1302,9 +1522,12 @@ def periodic_watchlist_check():
             traceback.print_exc()
 
 if __name__ == '__main__':
-    # Build FTP index on startup
-    print("Building initial FTP index...")
-    threading.Thread(target=build_ftp_index, daemon=True).start()
+    # Try loading pre-built index from disk (written by ftp_indexer.py)
+    if not load_ftp_index_from_disk():
+        print("No pre-built index found, building from FTP (run ftp_indexer.py for faster startups)...")
+        threading.Thread(target=build_ftp_index, daemon=True).start()
+    else:
+        print(f"Loaded pre-built index: {len(ftp_index)} files ready")
 
     # Start periodic watchlist checking
     print("Starting periodic watchlist checker...")
@@ -1317,7 +1540,8 @@ if __name__ == '__main__':
     print(f"Download Directory: {DOWNLOAD_DIR}")
     print(f"Watch Folder: {WATCH_FOLDER}")
     print(f"Reports Folder: {REPORTS_FOLDER}")
+    print(f"Index File: {INDEX_FILE}")
     print(f"Server: http://0.0.0.0:8500")
     print("="*60 + "\n")
 
-    app.run(debug=True, host='0.0.0.0', port=8500, use_reloader=False, threaded=True)
+    app.run(debug=True, host='0.0.0.0', port=9900, use_reloader=False, threaded=True)
