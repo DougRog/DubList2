@@ -526,22 +526,31 @@ def search_ftp_index(search_term, source_filter=None):
 
         exact_matches, partial_matches, fuzzy_matches = search_in_index(filtered_index)
 
-        # If no matches found in source directory, try Lilly Archive first
-        if not exact_matches and not partial_matches and not fuzzy_matches:
+        # If no exact match found in source directory, also check Lilly_Archive.
+        # Files may have been moved there from the original source folder.
+        if not exact_matches:
             archive_index = [
                 entry for entry in index
                 if '/lilly_archive' in entry['path'].lower()
             ]
 
             if archive_index:
-                exact_matches, partial_matches, fuzzy_matches = search_in_index(archive_index)
-                if exact_matches or partial_matches or fuzzy_matches:
+                arch_exact, arch_partial, arch_fuzzy = search_in_index(archive_index)
+                if arch_exact:
+                    # Prefer exact archive match over any source partial/fuzzy
+                    exact_matches = arch_exact
                     searched_archive = True
+                elif not partial_matches and not fuzzy_matches:
+                    # Nothing found in source at all; use archive partial/fuzzy
+                    if arch_partial or arch_fuzzy:
+                        partial_matches = arch_partial
+                        fuzzy_matches = arch_fuzzy
+                        searched_archive = True
 
-            # Still no matches? Search everywhere else
-            if not exact_matches and not partial_matches and not fuzzy_matches:
-                searched_everywhere = True
-                exact_matches, partial_matches, fuzzy_matches = search_in_index(index)
+        # Still no matches anywhere? Search all indexed directories
+        if not exact_matches and not partial_matches and not fuzzy_matches:
+            searched_everywhere = True
+            exact_matches, partial_matches, fuzzy_matches = search_in_index(index)
     else:
         # No source filter, search everywhere
         exact_matches, partial_matches, fuzzy_matches = search_in_index(index)
@@ -1250,21 +1259,18 @@ def download_report(filename):
 
 @app.route('/api/refresh_ftp_index', methods=['POST'])
 def refresh_ftp_index():
-    """Refresh FTP index - reloads from disk if available, otherwise scans FTP live"""
+    """Refresh FTP index - always triggers a live FTP scan so moved files (e.g. to Lilly_Archive) are picked up"""
     try:
-        if load_ftp_index_from_disk():
-            return jsonify({
-                'success': True,
-                'message': f'Index reloaded from disk: {len(ftp_index)} files',
-                'source': 'disk'
-            })
-        else:
-            threading.Thread(target=build_ftp_index, daemon=True).start()
-            return jsonify({
-                'success': True,
-                'message': 'No disk index found, FTP scan started in background',
-                'source': 'ftp'
-            })
+        # Load any existing disk file immediately so searches continue working during the scan
+        if os.path.exists(INDEX_FILE):
+            load_ftp_index_from_disk()
+        # Always start a fresh background scan regardless of whether a disk file exists
+        threading.Thread(target=build_ftp_index, daemon=True).start()
+        return jsonify({
+            'success': True,
+            'message': 'FTP scan started in background',
+            'source': 'ftp'
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

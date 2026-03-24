@@ -664,6 +664,7 @@
                 <div class="card-header" style="margin-top: 20px;">
                     <span>DUB List Results</span>
                     <div class="action-buttons">
+                        <button class="btn btn-secondary" onclick="searchAllSpots()" title="Re-run FTP search with the current index">🔄 Re-search FTP</button>
                         <button class="btn btn-primary" onclick="approveAllExact()">✓ Approve All Exact Matches</button>
                         <button class="btn btn-success" onclick="generateReport()">📊 Generate Report</button>
                     </div>
@@ -1176,16 +1177,23 @@
             try {
                 const response = await fetch(`/api/queue_status?session_id=${currentSession}`);
                 const data = await response.json();
-                
+
                 const container = document.getElementById('queue-container');
                 const countEl = document.getElementById('queue-count');
-                
+
                 const jobs = data.jobs || [];
                 countEl.textContent = `${jobs.length} item${jobs.length !== 1 ? 's' : ''}`;
-                
+
                 if (jobs.length === 0) {
                     container.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 20px;">No downloads in progress</p>';
                     return;
+                }
+
+                // Stop polling once all jobs have reached a terminal state
+                const activeJobs = jobs.filter(j => j.status === 'queued' || j.status === 'downloading' || j.status === 'validating');
+                if (activeJobs.length === 0 && queueMonitorInterval) {
+                    clearInterval(queueMonitorInterval);
+                    queueMonitorInterval = null;
                 }
                 
                 let html = '';
