@@ -63,6 +63,7 @@ INDEX_REFRESH_HOURS = 1
 INDEX_FILE = os.path.join(DATA_FOLDER, 'ftp_index.json')  # Written by ftp_indexer.py
 download_queue = {}  # job_id -> job_info
 queue_lock = threading.Lock()
+download_semaphore = threading.Semaphore(1)  # Only one FTP download at a time
 watchlist = {}  # house_id -> watchlist_item
 watchlist_lock = threading.Lock()
 watchlist_checking = False
@@ -499,7 +500,10 @@ def search_ftp_index(search_term, source_filter=None):
             elif search_clean in basename_lower or basename_lower in search_clean:
                 partial_matches.append(entry)
             else:
-                # Fuzzy match
+                # Fuzzy match — skip filenames with 3 characters or fewer (excl. extension)
+                name_only = os.path.splitext(entry['basename'])[0]
+                if len(name_only) <= 3:
+                    continue
                 similarity = similarity_ratio(search_clean, basename_lower)
                 if similarity >= 0.75:
                     fuzzy_matches.append({
@@ -599,6 +603,14 @@ def add_to_queue(spot_data, session_id):
 
 def process_download_job(job_id):
     """Process a single download job"""
+    with queue_lock:
+        job = download_queue.get(job_id)
+        if not job:
+            return
+        job['status'] = 'queued'
+        job['message'] = 'Waiting for previous download to finish...'
+
+    download_semaphore.acquire()
     try:
         with queue_lock:
             job = download_queue.get(job_id)
@@ -762,6 +774,8 @@ def process_download_job(job_id):
                 job['message'] = f'Error: {str(e)}'
         print(f"Error processing job {job_id}: {e}")
         traceback.print_exc()
+    finally:
+        download_semaphore.release()
 
 def get_video_duration(filepath):
     """Get video duration using ffprobe"""
