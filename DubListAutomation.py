@@ -72,6 +72,7 @@ INDEX_REFRESH_HOURS = 1
 INDEX_FILE = os.path.join(DATA_FOLDER, 'ftp_index.json')  # Written by ftp_indexer.py
 download_queue = {}  # job_id -> job_info
 queue_lock = threading.Lock()
+ftp_download_semaphore = threading.Semaphore(1)  # Only one FTP download at a time
 watchlist = {}  # house_id -> watchlist_item
 watchlist_lock = threading.Lock()
 watchlist_checking = False
@@ -514,7 +515,9 @@ def search_ftp_index(search_term, source_filter=None):
             elif search_clean in basename_lower or basename_lower in search_clean:
                 partial_matches.append(entry)
             else:
-                # Fuzzy match
+                # Fuzzy match — skip trivially short filenames to avoid spurious matches
+                if len(basename_lower) <= 3:
+                    continue
                 similarity = similarity_ratio(search_clean, basename_lower)
                 if similarity >= 0.75:
                     fuzzy_matches.append({
@@ -619,154 +622,163 @@ def process_download_job(job_id):
             job = download_queue.get(job_id)
             if not job:
                 return
-            job['status'] = 'downloading'
-            job['progress'] = 10
-            job['message'] = 'Connecting to FTP...'
+            job['message'] = 'Waiting for available FTP connection...'
 
-        ftp_path = job['ftp_path']
-        filename = os.path.basename(ftp_path)
-        temp_path = os.path.join(DOWNLOAD_DIR, f"temp_{job_id}_{filename}")
-
-        with queue_lock:
-            job['progress'] = 30
-            job['message'] = 'Downloading file...'
-
-        ftp = FTP()
-        ftp.connect(FTP_HOST, FTP_PORT, timeout=60)
-        ftp.login(FTP_USER, FTP_PASS)
-
+        # Serialize FTP downloads — only one connection at a time
+        ftp_download_semaphore.acquire()
         try:
-            with open(temp_path, 'wb') as f:
-                ftp.retrbinary(f'RETR {ftp_path}', f.write)
-        except Exception as retr_err:
-            # 550 = file not found — it was in the index but got moved/deleted
-            if '550' in str(retr_err):
-                print(f"File not found at indexed path, re-searching: {ftp_path}")
-                with queue_lock:
-                    job['progress'] = 15
-                    job['message'] = 'File moved/deleted, re-searching index...'
+            with queue_lock:
+                job['status'] = 'downloading'
+                job['progress'] = 10
+                job['message'] = 'Connecting to FTP...'
 
-                # Clean up partial temp file
-                try:
-                    os.unlink(temp_path)
-                except OSError:
-                    pass
-
-                # Re-search using ad_id then house_id
-                search_terms = [job['ad_id'], job['house_id']]
-                search_terms = [t for t in search_terms if t and t.strip()]
-                new_path = None
-
-                for term in search_terms:
-                    results = search_ftp_index(term, job.get('source'))
-                    matches = results.get('exact', []) or results.get('partial', [])
-                    for m in matches:
-                        if m['path'] != ftp_path:  # Skip the stale path
-                            new_path = m['path']
-                            break
-                    if new_path:
-                        break
-
-                if not new_path:
-                    raise Exception(f'File no longer on FTP server: {filename}')
-
-                # Retry download with the new path
-                print(f"Found alternate path: {new_path}")
-                filename = os.path.basename(new_path)
-                temp_path = os.path.join(DOWNLOAD_DIR, f"temp_{job_id}_{filename}")
-
-                with queue_lock:
-                    job['ftp_path'] = new_path
-                    job['ftp_filename'] = filename
-                    job['progress'] = 30
-                    job['message'] = f'Downloading from alternate path...'
-
-                # Reconnect in case the previous error closed the session
-                try:
-                    ftp.quit()
-                except Exception:
-                    pass
-                ftp = FTP()
-                ftp.connect(FTP_HOST, FTP_PORT, timeout=60)
-                ftp.login(FTP_USER, FTP_PASS)
-
-                with open(temp_path, 'wb') as f:
-                    ftp.retrbinary(f'RETR {new_path}', f.write)
-            else:
-                raise
-
-        # Keep track of the downloaded FTP path for the move step
-        downloaded_ftp_path = job['ftp_path']
-
-        with queue_lock:
-            job['status'] = 'validating'
-            job['progress'] = 60
-            job['message'] = 'Validating duration...'
-            job['local_path'] = temp_path
-
-        # Validate duration
-        actual_duration = get_video_duration(temp_path)
-
-        with queue_lock:
-            job['actual_duration'] = actual_duration
-            job['duration_match'] = check_duration_match(job['expected_duration'], actual_duration)
-            job['progress'] = 80
-            job['message'] = 'Renaming and transferring...'
-
-        # Rename using House ID
-        house_id = job['house_id']
-        extension = os.path.splitext(filename)[1]
-        new_filename = f"{house_id}{extension}"
-        final_path = os.path.join(WATCH_FOLDER, new_filename)
-
-        # Move to watch folder
-        shutil.move(temp_path, final_path)
-
-        # Move file on FTP server if enabled
-        if app_settings.get('ftp_move_after_download'):
-            dest_dir = app_settings.get('ftp_move_destination', '/Downloaded').rstrip('/')
-            ftp_filename = os.path.basename(downloaded_ftp_path)
-            dest_path = f"{dest_dir}/{ftp_filename}"
+            ftp_path = job['ftp_path']
+            filename = os.path.basename(ftp_path)
+            temp_path = os.path.join(DOWNLOAD_DIR, f"temp_{job_id}_{filename}")
 
             with queue_lock:
-                job['progress'] = 90
-                job['message'] = f'Moving file on FTP to {dest_dir}/...'
+                job['progress'] = 30
+                job['message'] = 'Downloading file...'
+
+            ftp = FTP()
+            ftp.connect(FTP_HOST, FTP_PORT, timeout=60)
+            ftp.login(FTP_USER, FTP_PASS)
 
             try:
-                # Reconnect for the move (download may have closed the session)
-                try:
-                    ftp.pwd()
-                except Exception:
+                with open(temp_path, 'wb') as f:
+                    ftp.retrbinary(f'RETR {ftp_path}', f.write)
+            except Exception as retr_err:
+                # 550 = file not found — it was in the index but got moved/deleted
+                if '550' in str(retr_err):
+                    print(f"File not found at indexed path, re-searching: {ftp_path}")
+                    with queue_lock:
+                        job['progress'] = 15
+                        job['message'] = 'File moved/deleted, re-searching index...'
+
+                    # Clean up partial temp file
+                    try:
+                        os.unlink(temp_path)
+                    except OSError:
+                        pass
+
+                    # Re-search using ad_id then house_id
+                    search_terms = [job['ad_id'], job['house_id']]
+                    search_terms = [t for t in search_terms if t and t.strip()]
+                    new_path = None
+
+                    for term in search_terms:
+                        results = search_ftp_index(term, job.get('source'))
+                        matches = results.get('exact', []) or results.get('partial', [])
+                        for m in matches:
+                            if m['path'] != ftp_path:  # Skip the stale path
+                                new_path = m['path']
+                                break
+                        if new_path:
+                            break
+
+                    if not new_path:
+                        raise Exception(f'File no longer on FTP server: {filename}')
+
+                    # Retry download with the new path
+                    print(f"Found alternate path: {new_path}")
+                    filename = os.path.basename(new_path)
+                    temp_path = os.path.join(DOWNLOAD_DIR, f"temp_{job_id}_{filename}")
+
+                    with queue_lock:
+                        job['ftp_path'] = new_path
+                        job['ftp_filename'] = filename
+                        job['progress'] = 30
+                        job['message'] = f'Downloading from alternate path...'
+
+                    # Reconnect in case the previous error closed the session
+                    try:
+                        ftp.quit()
+                    except Exception:
+                        pass
                     ftp = FTP()
                     ftp.connect(FTP_HOST, FTP_PORT, timeout=60)
                     ftp.login(FTP_USER, FTP_PASS)
 
-                # Ensure destination directory exists
+                    with open(temp_path, 'wb') as f:
+                        ftp.retrbinary(f'RETR {new_path}', f.write)
+                else:
+                    raise
+
+            # Keep track of the downloaded FTP path for the move step
+            downloaded_ftp_path = job['ftp_path']
+
+            with queue_lock:
+                job['status'] = 'validating'
+                job['progress'] = 60
+                job['message'] = 'Validating duration...'
+                job['local_path'] = temp_path
+
+            # Validate duration
+            actual_duration = get_video_duration(temp_path)
+
+            with queue_lock:
+                job['actual_duration'] = actual_duration
+                job['duration_match'] = check_duration_match(job['expected_duration'], actual_duration)
+                job['progress'] = 80
+                job['message'] = 'Renaming and transferring...'
+
+            # Rename using House ID
+            house_id = job['house_id']
+            extension = os.path.splitext(filename)[1]
+            new_filename = f"{house_id}{extension}"
+            final_path = os.path.join(WATCH_FOLDER, new_filename)
+
+            # Move to watch folder
+            shutil.move(temp_path, final_path)
+
+            # Move file on FTP server if enabled
+            if app_settings.get('ftp_move_after_download'):
+                dest_dir = app_settings.get('ftp_move_destination', '/Downloaded').rstrip('/')
+                ftp_filename = os.path.basename(downloaded_ftp_path)
+                dest_path = f"{dest_dir}/{ftp_filename}"
+
+                with queue_lock:
+                    job['progress'] = 90
+                    job['message'] = f'Moving file on FTP to {dest_dir}/...'
+
                 try:
-                    ftp.cwd(dest_dir)
-                except Exception:
-                    ftp.mkd(dest_dir)
+                    # Reconnect for the move (download may have closed the session)
+                    try:
+                        ftp.pwd()
+                    except Exception:
+                        ftp = FTP()
+                        ftp.connect(FTP_HOST, FTP_PORT, timeout=60)
+                        ftp.login(FTP_USER, FTP_PASS)
 
-                ftp.rename(downloaded_ftp_path, dest_path)
-                print(f"FTP move: {downloaded_ftp_path} -> {dest_path}")
-            except Exception as move_err:
-                # Log but don't fail the job — the download itself succeeded
-                print(f"Warning: FTP move failed for {ftp_filename}: {move_err}")
+                    # Ensure destination directory exists
+                    try:
+                        ftp.cwd(dest_dir)
+                    except Exception:
+                        ftp.mkd(dest_dir)
 
-        try:
-            ftp.quit()
-        except Exception:
-            pass
+                    ftp.rename(downloaded_ftp_path, dest_path)
+                    print(f"FTP move: {downloaded_ftp_path} -> {dest_path}")
+                except Exception as move_err:
+                    # Log but don't fail the job — the download itself succeeded
+                    print(f"Warning: FTP move failed for {ftp_filename}: {move_err}")
 
-        with queue_lock:
-            job['status'] = 'completed'
-            job['progress'] = 100
-            job['final_path'] = final_path
+            try:
+                ftp.quit()
+            except Exception:
+                pass
 
-            if job['duration_match']:
-                job['message'] = f'✓ Complete - Duration matches ({actual_duration})'
-            else:
-                job['message'] = f'⚠ Complete - Duration mismatch (Expected: {job["expected_duration"]}, Actual: {actual_duration})'
+            with queue_lock:
+                job['status'] = 'completed'
+                job['progress'] = 100
+                job['final_path'] = final_path
+
+                if job['duration_match']:
+                    job['message'] = f'✓ Complete - Duration matches ({actual_duration})'
+                else:
+                    job['message'] = f'⚠ Complete - Duration mismatch (Expected: {job["expected_duration"]}, Actual: {actual_duration})'
+
+        finally:
+            ftp_download_semaphore.release()
 
     except Exception as e:
         with queue_lock:

@@ -601,6 +601,84 @@
             font-size: 12px;
             color: #6b7280;
         }
+
+        /* Download toast */
+        #download-toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 320px;
+            background: #1f2937;
+            color: #f9fafb;
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            padding: 14px 16px;
+            z-index: 9999;
+            display: none;
+            animation: toast-in 0.2s ease;
+        }
+        #download-toast.visible { display: block; }
+        @keyframes toast-in {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .toast-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .toast-title {
+            font-weight: 600;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .toast-spinner {
+            width: 12px;
+            height: 12px;
+            border: 2px solid #4b5563;
+            border-top-color: #60a5fa;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            flex-shrink: 0;
+        }
+        .toast-dismiss {
+            background: none;
+            border: none;
+            color: #9ca3af;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            padding: 0 2px;
+        }
+        .toast-dismiss:hover { color: #f9fafb; }
+        .toast-body {
+            font-size: 12px;
+            color: #d1d5db;
+            margin-bottom: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .toast-progress-track {
+            height: 4px;
+            background: #374151;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .toast-progress-fill {
+            height: 100%;
+            background: #60a5fa;
+            border-radius: 2px;
+            transition: width 0.4s ease;
+        }
+        .toast-queue-note {
+            font-size: 11px;
+            color: #6b7280;
+            margin-top: 6px;
+        }
     </style>
 </head>
 <body>
@@ -1229,6 +1307,7 @@
                 });
                 
                 container.innerHTML = html;
+                updateDownloadToast(jobs);
             } catch (error) {
                 console.error('Queue update error:', error);
             }
@@ -2105,6 +2184,56 @@
                 performFTPSearch();
             }
         });
+
+        // ── Download toast ──────────────────────────────────────────
+        let toastDismissed = false;
+
+        function updateDownloadToast(jobs) {
+            const toast = document.getElementById('download-toast');
+            if (!toast) return;
+
+            const active = jobs.filter(j => j.status === 'queued' || j.status === 'downloading' || j.status === 'validating');
+
+            if (active.length === 0 || toastDismissed) {
+                toast.classList.remove('visible');
+                // Reset dismissed flag when all jobs finish so future downloads show again
+                if (active.length === 0) toastDismissed = false;
+                return;
+            }
+
+            // Show the first actively-downloading job, or the first queued one
+            const current = active.find(j => j.status === 'downloading' || j.status === 'validating') || active[0];
+            const waiting = active.length - 1;
+
+            document.getElementById('toast-house-id').textContent = current.house_id;
+            document.getElementById('toast-message').textContent = current.message;
+            document.getElementById('toast-progress-fill').style.width = `${current.progress}%`;
+
+            const noteEl = document.getElementById('toast-queue-note');
+            noteEl.textContent = waiting > 0 ? `${waiting} more waiting in queue` : '';
+
+            toast.classList.add('visible');
+        }
+
+        document.getElementById('toast-dismiss-btn')?.addEventListener('click', () => {
+            toastDismissed = true;
+            document.getElementById('download-toast').classList.remove('visible');
+        });
     </script>
+
+    <div id="download-toast">
+        <div class="toast-header">
+            <div class="toast-title">
+                <div class="toast-spinner"></div>
+                Downloading <span id="toast-house-id" style="font-family:monospace"></span>
+            </div>
+            <button class="toast-dismiss" id="toast-dismiss-btn" title="Dismiss">✕</button>
+        </div>
+        <div class="toast-body" id="toast-message"></div>
+        <div class="toast-progress-track">
+            <div class="toast-progress-fill" id="toast-progress-fill" style="width:0%"></div>
+        </div>
+        <div class="toast-queue-note" id="toast-queue-note"></div>
+    </div>
 </body>
 </html>
