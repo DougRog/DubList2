@@ -529,6 +529,11 @@
             color: #92400e;
         }
 
+        .badge-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
         .badge-search {
             background: #e0e7ff;
             color: #4338ca;
@@ -961,6 +966,7 @@
                         // Update spot data
                         const spot = spotsData.find(s => s.line_num === result.line_num);
                         if (spot) {
+                            spot.mc_exists = result.mc_exists || false;
                             if (!result.match) {
                                 spot.status = 'no_match';
                             } else if (result.match.type === 'exact' && result.match.matches.length === 1) {
@@ -1094,11 +1100,15 @@
                     ? `<td class="checkbox-cell"><input type="checkbox" ${isChecked} onchange="toggleResultsSelection(${spot.line_num})" style="cursor: pointer;"></td>`
                     : (hasSelectableItems ? '<td class="checkbox-cell"></td>' : '');
 
+                const mcExistsBadge = spot.mc_exists
+                    ? ' <span class="badge badge-danger" title="A file with this ID already exists in the media library at /mnt/mc_media">Exists in Library</span>'
+                    : '';
+
                 html += `
                     <tr>
                         ${checkboxCell}
                         <td>${spot.line_num}</td>
-                        <td class="mono"><strong>${spot.house_id}</strong></td>
+                        <td class="mono"><strong>${spot.house_id}</strong>${mcExistsBadge}</td>
                         <td class="mono">${spot.ad_id}</td>
                         <td>${spot.duration}</td>
                         <td>${spot.source}</td>
@@ -1118,7 +1128,13 @@
         async function approveSpot(lineNum, ftpPath, ftpFilename) {
             const spot = spotsData.find(s => s.line_num === lineNum);
             if (!spot) return;
-            
+
+            if (spot.mc_exists) {
+                if (!confirm(`A file with ID "${spot.house_id}" already exists in the media library (/mnt/mc_media).\n\nDo you want to replace it?`)) {
+                    return;
+                }
+            }
+
             spot.ftp_path = ftpPath;
             spot.ftp_filename = ftpFilename;
             spot.status = 'approved';

@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify, send_file
 import os
 import re
 import json
+import glob
 import threading
 import subprocess
 from datetime import datetime
@@ -24,6 +25,14 @@ DOWNLOAD_DIR = '/mnt/IngestNew/Dubs/Downloaded'
 WATCH_FOLDER = '/mnt/IngestNew/Dubs/Watch'
 DATA_FOLDER = '/mnt/IngestNew/Dubs/Data'
 REPORTS_FOLDER = '/mnt/IngestNew/Dubs/Reports'
+MC_MEDIA_FOLDER = '/mnt/mc_media'
+
+# Only match video files - exclude images, documents, etc.
+VIDEO_EXTENSIONS = {
+    '.mov', '.mp4', '.mxf', '.avi', '.wmv', '.mpg', '.mpeg',
+    '.m4v', '.ts', '.mts', '.m2ts', '.dv', '.3gp', '.flv',
+    '.mkv', '.webm', '.vob', '.ogv', '.rm', '.asf', '.f4v',
+}
 
 # FTP Configuration
 FTP_HOST = '192.168.0.198'
@@ -488,6 +497,12 @@ def search_ftp_index(search_term, source_filter=None):
         exact_matches = []
         partial_matches = []
         fuzzy_matches = []
+
+        # Only consider video files (belt-and-suspenders in case index has non-video entries)
+        index_subset = [
+            e for e in index_subset
+            if os.path.splitext(e['filename'])[1].lower() in VIDEO_EXTENSIONS
+        ]
 
         for entry in index_subset:
             basename_lower = entry['basename'].lower()
@@ -1179,11 +1194,15 @@ def search_all_spots():
                     }
                     save_watchlist()
 
+        # Check if a file with this House ID already exists in the media library
+        mc_exists = bool(glob.glob(os.path.join(MC_MEDIA_FOLDER, f"{spot['house_id']}.*")))
+
         results.append({
             'line_num': spot['line_num'],
             'house_id': spot['house_id'],
             'ad_id': spot['ad_id'],
-            'match': best_match
+            'match': best_match,
+            'mc_exists': mc_exists
         })
 
     return jsonify({'success': True, 'results': results})
