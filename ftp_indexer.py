@@ -37,6 +37,13 @@ DEFAULT_INTERVAL_MINUTES = 15
 MAX_DEPTH = 15
 MAX_RETRIES = 3
 
+# Only index video files - exclude images, documents, etc.
+VIDEO_EXTENSIONS = {
+    '.mov', '.mp4', '.mxf', '.avi', '.wmv', '.mpg', '.mpeg',
+    '.m4v', '.ts', '.mts', '.m2ts', '.dv', '.3gp', '.flv',
+    '.mkv', '.webm', '.vob', '.ogv', '.rm', '.asf', '.f4v',
+}
+
 # ============================================
 # Logging
 # ============================================
@@ -181,6 +188,9 @@ class FTPIndexer:
                             log.error(f"Error scanning {subdir}: {e}")
                         self.stats['errors'] += 1
                 else:
+                    ext = os.path.splitext(item_name)[1].lower()
+                    if ext not in VIDEO_EXTENSIONS:
+                        continue
                     full_path = f"{directory}/{item_name}".replace('//', '/')
                     base_name = os.path.splitext(item_name)[0]
                     self.index.append({
