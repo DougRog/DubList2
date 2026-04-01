@@ -588,8 +588,22 @@ def search_ftp_index(search_term, source_filter=None):
 def add_to_queue(spot_data, session_id):
     """Add approved spot to download queue"""
     job_id = f"{session_id}_{spot_data['line_num']}"
-    
+    ftp_path = spot_data.get('ftp_path')
+
     with queue_lock:
+        # Skip if this exact job is already active or completed (prevents double-clicks / re-approvals)
+        existing = download_queue.get(job_id)
+        if existing and existing['status'] != 'failed':
+            return job_id
+
+        # Skip if the same FTP file is already actively downloading in this session
+        if ftp_path:
+            for j in download_queue.values():
+                if (j['session_id'] == session_id
+                        and j.get('ftp_path') == ftp_path
+                        and j['status'] in ('queued', 'downloading', 'validating')):
+                    return j['job_id']
+
         download_queue[job_id] = {
             'job_id': job_id,
             'session_id': session_id,
@@ -598,8 +612,8 @@ def add_to_queue(spot_data, session_id):
             'ad_id': spot_data['ad_id'],
             'expected_duration': spot_data['duration'],
             'source': spot_data['source'],
-            'ftp_path': spot_data['ftp_path'],
-            'ftp_filename': spot_data['ftp_filename'],
+            'ftp_path': ftp_path,
+            'ftp_filename': spot_data.get('ftp_filename'),
             'status': 'queued',
             'progress': 0,
             'message': 'Waiting in queue',
@@ -609,10 +623,10 @@ def add_to_queue(spot_data, session_id):
             'final_path': None,
             'added_time': datetime.now().isoformat()
         }
-    
+
     # Start download in background thread
     threading.Thread(target=process_download_job, args=(job_id,), daemon=True).start()
-    
+
     return job_id
 
 def process_download_job(job_id):

@@ -1161,7 +1161,7 @@
                     }
                 }
                 
-                if (spot.status === 'ready' || spot.status === 'review') {
+                if (spot.status === 'ready') {
                     actionButton = `
                         <button class="btn btn-success" onclick="approveSpot(${spot.line_num}, '${spot.ftp_path}', '${spot.ftp_filename}')">
                             ✓ Approve
